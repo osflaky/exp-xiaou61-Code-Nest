@@ -1,0 +1,1046 @@
+# Code Nest
+
+![Version](https://img.shields.io/badge/version-v2.5.8-blue.svg)
+![Java](https://img.shields.io/badge/java-17-orange.svg)
+![Spring Boot](https://img.shields.io/badge/spring%20boot-3.4.4-brightgreen.svg)
+![Vue](https://img.shields.io/badge/vue-3.x-4fc08d.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+
+## 📖 项目简介
+
+Code Nest 是一个面向开发者的成长型社区与知识运营平台，采用 Spring Boot 3.4.4 + Vue3 + Vite 的前后端分离架构，后台整合 Sa-Token 权限、Redisson 缓存、MySQL 题库/内容系统以及 Prometheus 监控指标，提供包含题库、面试辅导、学习资产转化引擎、知识图谱、博客、代码工坊、在线简历、IM 聊天、积分激励与抽奖等在内的多模块能力。
+
+## v2.5.8 AI Reasoning Configuration
+
+`v2.5.8` 为统一 AI 运行时增加可验证的 OpenAI-compatible 推理等级配置。
+
+- **推理等级透传**：`XIAOU_AI_REASONING_EFFORT` 会进入模型默认请求参数，普通请求和覆盖 completion token 上限的场景都会保留该值。
+- **受控配置**：支持 `none`、`minimal`、`low`、`medium`、`high`、`xhigh`、`max` 和 `ultra`；空值继续使用提供商默认值，非法值会在模型初始化时失败。
+- **专用出站代理**：受限网络环境可设置 `XIAOU_AI_PROXY_URL=http://host:port`，仅 AI provider 请求走代理，不修改 JVM 其他 HTTP 调用。
+- **密钥边界**：真实 Base URL 与 API Key 仍只通过生产环境变量提供，不进入仓库、发布包或应用日志。
+
+本版本无数据库迁移；数据库 schema 基线仍为 `v2.5.3`。
+
+## v2.5.7 Startup Hotfix
+
+`v2.5.7` 修复 `v2.5.6` 在生产启动与发布权限匹配阶段暴露的问题，不增加业务功能。
+
+- **SRE Worker 启动修复**：显式标记 `SreOutboxWorker` 的生产注入构造器，避免兼容构造器导致 Spring 回退到不存在的默认构造器。
+- **启动回归测试**：最小 Spring 容器直接验证 Worker 的生产依赖装配，锁定此前只在完整应用启动时出现的异常。
+- **发布权限契约**：生产工作流通过 sudoers 批准的绝对路径调用容量治理脚本，并由 release contract 测试持续校验。
+
+本版本无数据库迁移和新增生产环境变量；数据库 schema 基线仍为 `v2.5.3`。
+
+## v2.5.6 Architecture Governance
+
+`v2.5.6` 不增加业务功能，集中治理启动、基础模块、领域所有权、跨模块读取、缓存与韧性、前后端契约、路由注册和发布元数据。
+
+### 本次版本完成
+
+- **独立启动壳**：`xiaou-bootstrap` 独占 Spring Boot 启动类、运行配置和可执行 JAR；`xiaou-application` 只保留跨领域应用编排。
+- **基础模块拆分**：公共能力按 core、web、security、cache、persistence 五类拆开，`xiaou-common` 仅作为旧模块迁移期兼容聚合。
+- **领域所有权**：SRE RCA/评测完整归入 `xiaou-sre`，通知实体、Mapper、配置和发布接口归入 `xiaou-notification`。
+- **端口与适配器**：Growth Coach、首页和学习驾驶舱的跨领域读取通过应用端口访问，不再由编排逻辑直接持有其他领域 Mapper/Entity。
+- **共享运行策略**：缓存访问收敛到 `CacheStore` / `TextStateStore`，聚合查询统一使用 `xiaou-resilience` 的有界超时和降级结果。
+- **统一接口契约**：后端错误映射为 4xx/5xx HTTP 语义，同时保留业务码；双前端共享 `@code-nest/api-contract` 的解包、错误分类和通知 DTO。
+- **路由业务切片**：用户端和管理端路由按业务域拆分，入口文件只负责组合、守卫和滚动行为。
+- **发布单一事实源**：`release/manifest.json` 统一版本、数据库基线、Docker 标签和制品布局，其余版本文件由同步器生成并由 CI/CD 校验。
+- **架构门禁**：`scripts/check-architecture.py` 和契约测试阻止启动职责、跨领域持久化、通知实现、缓存实现和前端契约重新泄漏。
+
+本版本无数据库迁移；数据库 schema 基线仍为 `v2.5.3`。
+
+## v2.5.5 Evidence-Backed Capability Graph
+
+`v2.5.5` 把已经落库的成长证据进一步组织成可解释的能力结构，让用户看到“哪些能力正在形成、依据是什么、下一步补哪里”。
+
+### 本次版本完成
+
+- **能力图谱 API**：新增 `GET /user/growth-coach/capability-graph`，提供问题解决、面试表达、项目交付、持续执行和求职准备五类能力节点。
+- **证据可回溯**：每个节点返回分数、可信度、近期趋势、证据类型和最近证据引用；综合分只纳入有证据的节点。
+- **关系与补强**：展示能力之间的确定性支撑关系，并复用既有短板洞察生成补强项和练习入口。
+- **读取链路优化**：能力节点和短板洞察复用同一份有界证据快照，避免一次刷新重复触发证据投影。
+- **用户端入口**：新增 `/growth-capabilities` 页面，并接入成长自动驾驶、学习导航和命令入口。
+- **只读边界**：不创建任务、不修改计划、不新增数据库表，不把模型建议当成能力事实。
+
+能力图谱不需要迁移，生产发布继续沿用 v2.5.4 的显式迁移开关和发布前验证流程。
+
+## v2.5.4 Master Integration And Production Governance
+
+`v2.5.4` 将 v2.5.1 的生产 SRE 治理与 v2.5.3 的成长闭环、迁移和发布安全能力合并到 master。
+
+### 本次版本完成
+
+- **成长闭环稳定性**：Growth Coach 数据源有界并发读取，带超时、来源状态、耗时指标和 5 秒短缓存；事件契约增加 schema/client/entry 元数据、来源白名单和行动结果事件。
+- **计划调整可审计**：成长计划调整提供预览、版本基线、幂等应用和变更记录，任务保留真实资源引用，避免重复重排覆盖历史。
+- **远程来源安全**：敏感词远程来源只允许 HTTP(S)，拒绝回环、内网、link-local、云元数据地址和重定向，并限制响应大小。
+- **AI 运行时保护**：统一 AI 调用增加并发上限、permit 等待超时、拒绝指标和 operation id 日志。
+- **发布与数据库治理**：发布清单、版本一致性检查、checksum 迁移 ledger、release bundle smoke test、磁盘/备份容量检查和失败回滚全部接入 CI/CD。
+- **主线治理整合**：SRE 评测队列、容量治理、外部探针、运维资产和发布前后基线校验统一进入同一发布链路。
+
+生产迁移入口见 [`sql/MIGRATIONS.md`](sql/MIGRATIONS.md)，发布流程见 [`RELEASE.md`](RELEASE.md)。生产部署默认不执行数据库写操作，只有显式设置 `CODE_NEST_RUN_MIGRATIONS=true` 才会应用迁移。
+
+### 平台定位
+
+- **vue3-admin-front**：面向运营/管理员的后台，覆盖菜单/角色、内容审核、题库管理、版本追踪、任务配置、观测看板等能力。
+- **vue3-user-front**：面向开发者的用户端，提供刷题、简历制作、动态广场、博客阅读、代码分享、学习资产沉淀、通知消息等场景。
+- **xiaou-bootstrap**：唯一 Spring Boot 启动壳，组装运行配置并产出可执行 JAR。
+- **xiaou-application**：跨领域应用编排模块，承载首页、学习驾驶舱和 Growth Coach 等组合用例。
+
+## v2.4.3 Guided First Week And Home Overview
+
+`v2.4.3` 将首次登录、首周学习任务和首页数据加载收成一条可恢复的用户流程。
+
+### 本次版本完成
+
+- **目标型首次引导**：登录后缺少目标画像时收集岗位、学习阶段和每周投入时间，直接生成首周自动驾驶计划。
+- **首页聚合**：新增 `/user/home/overview`，服务端并行读取首页来源，单个来源失败仅降级对应区域。
+- **行动优先首页**：把“今天的行动”前置，版本更新下沉为次级内容，减少首屏看板化干扰。
+- **求职自动同步**：闭环页面显示自动同步状态，恢复同步只在异常恢复菜单中出现。
+- **按需 UI 组件**：用户端通过 Vite 自动解析 Element Plus 组件与样式，不再全量 `app.use(ElementPlus)`。
+- **数据库迁移**：新增 `sql/v2.4.3/growth_autopilot_onboarding.sql`，为首周计划保存学习阶段。
+
+## v2.4.2 UX And Flow Refinement
+
+`v2.4.2` 聚焦用户端高频流程的可发现性和移动端可用性，在不改变路由、后端状态机、数据库结构或对外 API 的前提下完成体验修复。
+
+### 本次版本完成
+
+- **移动端导航**：导航抽屉脱离顶部栏容器，覆盖完整视口并支持长菜单滚动。
+- **认证首屏**：窄屏下先展示登录/注册表单，品牌说明移至后续内容并压缩冗余展示。
+- **目标导向导航**：主导航聚焦今天、学习、求职和社区，练习、创作和辅助能力收进更短的次级菜单。
+- **行动优先工作台**：求职闭环的下一步行动先于指标和图表展示；面试题单先于学习热力图展示。
+- **故障降噪**：首页聚合请求在异常时由模块级降级状态表达，不再产生多条重复的全局提示。
+- **版本基线统一**：Maven、共享设计系统、双前端、文档站、Jar 命令与 Docker 示例统一升级到 `v2.4.2`。
+
+## v2.4.0 Unified Backend Agent Runtime
+
+`v2.4.0` 将管理员自然语言操作收口为后端统一 Agent 运行时。管理端只调用 `POST /admin/agent/chat`，后端负责 LLM 规划、工具注册、权限与策略、预览、强确认、执行和审计。
+
+### 本次版本完成
+
+- **单一聊天入口**：自然语言请求、会话续接和写操作确认统一经过 `/admin/agent/chat`。
+- **通用工具扩展**：新增能力只需注册带 definition/schema 的 `AgentTool` Bean，不在前端维护动作目录、关键词路由或业务分组。
+- **后端安全边界**：候选计划必须重新经过 Registry、Schema、权限、风险策略和审计状态机，LLM 不直接执行写入。
+- **管理员数据隔离**：会话上下文存储键按管理员 ID 命名空间隔离，超长请求在进入 LLM 前被拒绝，无归属审计不能继续确认。
+- **可观测与可恢复**：统一输出 trace、artifact、metrics、readiness、dry-run 和审计结果，并支持幂等确认与恢复分析。
+- **真实模型验收**：当前 26 个生产工具全部通过真实 `gpt-5.5` 规划与执行验收；两个写工具完成隔离数据库、强确认和结果回查。
+- **全站测试门禁**：新增后端、双前端、AI、RAG、仓库卫生和 release 分层评测脚本，并接入主 CI。
+- **版本基线统一**：后端 Maven、管理端前端、用户端前端、文档站、Jar 命令与 Docker 镜像标签统一升级到 `v2.4.0`。
+
+## 🧯 v2.3.2 Production Patch
+
+`v2.3.2` 聚焦线上补丁收口：把 Git 提交记录整理为正式版本历史，修复版本时间轴分页总数错误，并恢复用户端首页首屏展示。这个版本承接 `v2.3.1` 的 CI/CD 能力，仍通过版本分支推送自动发布到服务器。
+
+### 本次小版本完成
+
+- **版本历史重建**：线上版本历史按 Git 提交与版本分支重新整理为 `v1.0.0` 至 `v2.3.1` 的 27 条发布记录。
+- **版本分页修复**：版本时间轴和管理端版本列表改为显式统计总数，修复只返回当前页数量的问题。
+- **首页首屏修复**：移除首页 hero 区错误的 reveal 隐藏状态，修复线上首页首屏大面积空白问题。
+- **版本基线统一**：后端 Maven、管理端前端、用户端前端、文档站、Jar 命令与 Docker 镜像标签统一升级到 `v2.3.2`。
+
+## 🚢 v2.3.1 Production CI/CD
+
+`v2.3.1` 聚焦完整 CI/CD 能力：代码推送后自动完成后端、双前端和文档站构建校验，版本分支或手动触发后自动构建 release bundle，同步服务器并执行备份、替换、健康检查和失败回滚。后续更新版本时，服务器可以跟随发布流水线同步更新，减少频繁手工部署。
+
+### 本次小版本完成
+
+- **统一 CI 校验**：新增 GitHub Actions CI，覆盖后端 Maven 打包、用户端构建、管理端构建、文档站构建和脚本语法检查。
+- **生产自动部署**：新增生产部署 workflow，支持 `v*` 版本分支/tag 推送或手动选择 ref 后构建 release bundle 并 SSH 上传服务器。
+- **服务器发布脚本**：新增 `scripts/deploy-release.sh`，内置当前版本备份、Jar 替换、双前端静态目录替换、Nginx reload、Actuator 健康检查和失败回滚。
+- **回滚能力内建**：部署成功后在服务器保留 `/opt/code-nest/bin/deploy-release.sh`，可用最近备份目录快速手动回滚。
+- **密钥边界收口**：服务器地址、SSH 私钥、部署用户等只通过 GitHub Secrets 注入，仓库不保存真实密码或 token。
+- **发布文档补齐**：新增生产 CI/CD 文档，记录 Secrets、触发方式、服务器目录、回滚命令和排障入口。
+- **版本基线统一**：后端 Maven、管理端前端、用户端前端、文档站、Jar 命令与 Docker 镜像标签统一升级到 `v2.3.1`。
+
+### 线上部署验证
+
+- **自动部署已跑通**：`v2.3.1` 分支推送后会触发 `Deploy Production`，最新验证提交 `a2bef8a` 已完成构建、打包、上传、替换与健康检查。
+- **验证结果**：GitHub Actions 运行 `27497516135` 已成功完成，生产健康检查返回 `HTTP 200`，Actuator 状态为 `UP`，数据库与 Redis 均为 `UP`。
+- **线上入口**：用户端与统一入口为 `http://36.140.150.167:81`，后端接口基址为 `http://36.140.150.167:81/api`，健康检查为 `http://36.140.150.167:81/api/actuator/health`。
+- **后续发布方式**：继续向 `v*` 版本分支或 `v*` tag 推送即可自动发布，也可以在 GitHub Actions 中手动触发 `Deploy Production` 并指定 ref。
+
+## 🎨 v2.3.0 UI Shell and Interview Operations
+
+`v2.3.0` 聚焦线上体验修复和运营端可用性：双前端统一导航居中、主题切换收敛为更轻的下拉控件，社区/朋友圈页面恢复宽屏内容密度，同时修复聊天室 WebSocket 代理、管理端分类管理和账号安全相关细节。本次也沉淀了前端快速部署脚本与 You-Deserve 题库迁移工具，方便后续继续做内容侧导入和回滚。
+
+### 本次小版本完成
+
+- **双端 UI 壳层优化**：管理端与用户端顶部导航居中逻辑统一，学习/创作菜单图标对齐，主题配置从大块面板收敛为轻量下拉式配置。
+- **社区内容宽屏化**：技术社区与朋友圈页面改为占满主内容区，减少桌面端大面积留白。
+- **聊天室连接修复**：用户端 WebSocket 地址按当前访问源自动推导，Vite 代理开启 `ws`，避免线上聊天室反复停留在重连状态。
+- **管理端安全与体验收口**：登录页移除硬编码账号密码展示，用户重置密码改为显式输入，避免默认密码继续扩散。
+- **分类管理 Bug 修复**：面试分类管理统一处理分类 ID、状态字段和树形数据，修复编辑/启停等操作里的数据类型漂移。
+- **部署效率提升**：新增双前端构建与上传部署脚本，减少频繁 UI 调整后的人工部署步骤。
+- **题库迁移工具沉淀**：新增 You-Deserve 题库迁移脚本和操作文档；线上试导入数据已按用户要求删除，工具保留用于后续筛选后再迁移。
+- **版本基线统一**：后端 Maven、管理端前端、用户端前端、文档站、Jar 命令与 Docker 镜像标签统一升级到 `v2.3.0`。
+
+## 🛠️ v2.2.2 Governance and Workflow Hardening
+
+`v2.2.2` 延续工程质量治理主线，重点补齐 **GitHub 协作规范、文档站维护基线、学习小组工作流契约、发布流程和版本口径一致性**。本次版本不追求堆叠新功能，而是把多人协作、发布检查、接口契约和文档同步做成更稳定的长期机制。
+
+### 本次大版本优化
+
+- **统一异常出口增强**：补齐请求体解析、请求头缺失、非法参数、文件大小超限、不可接受媒体类型等全局异常处理，减少 Controller 层重复兜底。
+- **CodePen Controller 瘦身**：用户端与管理端控制器移除大批重复 `try/catch + Result.error(e.getMessage())` 样板，业务异常统一交给全局处理器。
+- **请求 DTO 参数校验**：为 CodePen 创建、列表、Fork、评论、推荐、状态更新、标签合并等请求补齐 `jakarta.validation` 约束。
+- **公共工具与安全配置治理**：优化 Redis、JSON、线程池、Sa-Token 登录工具和 JWT secret 配置，降低空值、过时 API 与硬编码密钥风险。
+- **后端类型安全治理**：收敛文件存储、博客、聊天 WebSocket、迁移任务和 go-judge 客户端的 raw Map/List 解析，减少 unchecked warning 和运行期强转风险。
+- **生产 Mapper SQL 显式化**：治理 `xiaou-sql-optimizer`、`xiaou-team`、`xiaou-oj`、`xiaou-community`、`xiaou-interview` 的通配列查询，并修正小组每日统计 Mapper 与建表字段不一致的隐患。
+- **前端规范入口补齐**：新增 `.editorconfig` 与双前端 ESLint 配置，修复 lint error/warning，使管理端与用户端进入 `0 error / 0 warning` 的可持续治理状态。
+- **前端构建噪声清零**：双前端新增命名 vendor 拆包、Markdown 高亮按需注册、Sass modern API 与 chunk 预算，生产构建不再输出 Sass legacy 与大 chunk 警告。
+- **学习小组契约对齐**：修复任务、打卡、讨论、成员、统计等前后端字段与接口参数不一致问题。
+- **GitHub 协作标准化**：新增贡献指南、变更日志、安全策略、行为准则、发布流程、Issue 模板与 PR 模板。
+- **文档站维护增强**：补齐发布交接、版本说明、环境变量、验证场景、模块手册和维护规范，降低交接成本。
+- **仓库卫生治理**：新增 `.gitattributes` 并收敛临时生成文件忽略规则，减少跨平台换行与本地产物污染。
+- **版本基线统一**：后端 Maven、管理端前端、用户端前端、文档站、Jar 命令与 Docker 镜像标签统一升级到 `v2.2.2`。
+
+## 🧯 v2.1.2 聊天室防刷增强版
+
+`v2.1.2` 在 `v2.1.1` 的安全基线上继续补齐聊天室运行保护，重点解决高频刷屏、异常消息入库和前端失败态不可追踪的问题。
+
+### 本次小版本完成
+
+- **聊天室消息限流**：新增 Redis 固定窗口限流，默认每个用户 10 秒最多发送 8 条消息，可通过 `xiaou.chat.rate-limit.*` 调整。
+- **输入中事件降噪**：`TYPING` 事件也纳入限流，避免输入状态广播在高频输入或异常脚本下冲击 WebSocket。
+- **后端消息校验**：文本、图片消息按类型做空值、长度和图片 URL 协议校验，非法消息不再进入数据库。
+- **前端失败态闭环**：后端返回限流或校验错误时，用户端会把本地乐观消息标记为失败并保留错误提示，方便重试或定位。
+- **版本基线升级**：后端 Maven、管理端前端、用户端前端、README Jar/Docker 示例统一升级到 `v2.1.2`。
+
+## 🛡️ v2.1.1 安全加固版
+
+`v2.1.1` 基于 `v2.1.0` Growth Intelligence 稳定线做小版本安全与稳定性更新，重点收敛文件接口、WebSocket 握手与前端 HTML 渲染风险，不改变既有 AI 学习成长驾驶舱和 AI Runtime 质量中心的功能基线。
+
+### 本次小版本完成
+
+- **文件接口权限收口**：上传、删除、列表、存在性检查需要用户端或管理端登录；文件信息、下载与 URL 获取会按公开/私有状态校验访问权限。
+- **WebSocket 握手票据化**：聊天室连接不再把长期 Token 放进 URL，改为通过登录态换取 60 秒一次性票据并在握手时消费。
+- **聊天室实时链路补齐**：服务端补充 PONG 心跳响应和 TYPING 输入中事件，前端自适应心跳与输入状态提示可以闭环工作。
+- **CORS 白名单配置化**：HTTP 与 WebSocket 的跨域来源从通配默认值改为可配置白名单，默认覆盖本地前端开发地址。
+- **Markdown / v-html 净化**：用户端与管理端 Markdown 渲染统一接入 DOMPurify，并补齐通知、摸鱼内容、闪卡、JSON 工具等高风险 `v-html` 场景的转义或净化。
+
+## 🚀 v2.1.0 Growth Intelligence
+
+`v2.1.0` 继续沿着 AI Runtime 重构后的治理底座往上建设，把版本主题升级为 **Growth Intelligence**：用户端关注“开发者成长闭环”，管理端关注“AI Runtime 质量闭环”。
+
+### 本次大版本新增
+
+- **AI 学习成长驾驶舱 2.1**：用户端学习驾驶舱新增成长分、能力雷达、短板诊断、今日任务闭环和 AI 学习复盘，把 OJ、题库、闪卡、计划、积分串成一条可执行的成长路线。
+- **AI Runtime 质量与治理中心**：管理端 AI 治理页升级为质量中心，新增质量分、Prompt/Schema/RAG/Regression/Runtime 覆盖矩阵、运行时洞察和风险队列。
+- **治理数据复用现有接口**：继续沿用 `/user/learning-cockpit/overview` 和 `/admin/ai/governance/overview`，通过兼容字段增强前端体验，不额外增加部署复杂度。
+- **README 与发布基线统一**：后端 Maven、管理端前端、用户端前端、Jar 命令与 Docker 镜像标签统一升级到 `v2.1.0`。
+
+## 🚀 v2.0.0 AI Runtime 重构版
+
+`v2.0.0` 是一次完整的 AI 基础设施重构版本，这次不是“在旧链路上继续补功能”，而是彻底移除了历史 Coze 运行链路，统一切换到新的可治理 AI Runtime。
+
+### 本次重构完成了什么
+
+- **彻底移除 Coze 链路**：删除 Coze SDK、Coze 配置、Coze 工具类与历史工作流依赖，主干不再保留旧运行路径。
+- **统一 AI Runtime 底座**：`xiaou-ai` 以 `LangChain4j + LangGraph4j + LlamaIndex` 重构，形成“模型层 + Prompt 层 + Graph 编排层 + RAG 接入层 + 场景层”的清晰分层。
+- **支持 OpenAI 兼容中转站**：当前后台 AI 配置测试与运行时接入面向 OpenAI Compatible API 设计，可直接对接中转站模型。
+- **建立 Prompt 治理体系**：Prompt、RAG Query、Structured Output Schema 全部显式命名、版本化、可调试、可回归、可观测，不再把长提示词散落在业务代码里。
+- **引入知识库 sidecar**：采用独立 `LlamaIndex` 服务承载知识库导入、检索、召回解释与文档管理，Java 主项目通过网关访问，不强耦合 Python 内部实现。
+- **补齐 AI 管理后台**：新增 `AI 配置与观测` 页面，覆盖模型连通性测试、Prompt 在线试跑、RAG 检索调试、知识库文档导入/导出/删除、运行指标、黄金样例回归。
+- **补齐质量治理闭环**：新增 AI 黄金样例回归、最近一次结果恢复、最近历史回看、Prompt/RAG/Schema catalog、运行观测与失败定位基础能力。
+
+### 当前已重构接入的 AI 场景
+
+- **社区摘要**：基于 `LangChain4j` 的结构化摘要生成。
+- **模拟面试**：基于 `LangGraph4j` 的多轮问答、评分、追问、总结流程。
+- **求职作战台**：JD 解析、简历匹配、行动计划、面试复盘等链路统一切到新 Runtime。
+- **SQL 优化**：SQL 分析、重写、收益对比与组合流程统一切到新 Runtime，并可接入知识库辅助解释。
+
+## ✨ 功能亮点
+
+### 平台级能力
+
+- **细粒度鉴权**：基于 Sa-Token 构建双端（管理员/用户）登录域、权限树、会话隔离与 Token 签名机制，支持并发登录及多场景鉴权。
+- **智能题库体系**：`xiaou-interview` 内置题型分类、刷题记录、自动组卷、错题重练及统计报表，配合知识图谱实现学习闭环。
+- **内容创作矩阵**：博客系统、动态广场、Bug 趣味墙、代码工坊与在线简历模块组合为全栈内容生产链路。
+- **成长激励与运营**：积分体系、摸鱼任务、抽奖活动、版本发布墙、消息通知与活动打卡全面强化用户粘性。
+- **内容转学习资产**：支持从博客、社区帖子、CodePen 作品、AI 模拟面试报告中提炼闪卡、练习清单、面试题草稿与知识节点候选，形成可审核、可复用的学习资产闭环。
+- **统一资产管理**：`xiaou-filestorage` 负责文件/附件/导出作品上传，多种存储适配；`xiaou-resume` 支持简历模板、模块化数据、版本历史与多格式导出。
+- **AI学习成长驾驶舱**：用户端聚合 OJ、题库、闪卡、计划、积分、排名与求职目标，提供成长分、能力雷达、短板诊断和今日任务闭环。
+- **AI Runtime质量治理**：`xiaou-ai` 统一沉淀 AI Runtime 场景目录、配置状态、质量评分、覆盖矩阵、运行指标与风险队列，管理端可直接定位 Prompt、Schema、RAG 和运行时风险。
+- **企业级可观测性**：SQL/行为审计、Redisson 限流、异步任务监控、Prometheus + Grafana 指标、Nginx/ Docker 部署脚本开箱即用。
+- **统一 AI Runtime**：`xiaou-ai` 已重构为 `LangChain4j + LangGraph4j + LlamaIndex` 分层架构，AI Prompt 采用模板化、版本化和可观测治理，覆盖社区摘要、模拟面试、求职作战台与 SQL 优化等核心场景。
+
+### 模块亮点
+
+- **在线简历（xiaou-resume）**：拖拽式编辑、模板市场、版本比对、PDF/Word/HTML 导出与分享统计。
+- **代码工坊（xiaou-codepen）**：内置前端 + 后端 + SQL 演示沙盒，支持作品发布、Fork、收藏及后台运营。
+- **知识图谱（xiaou-knowledge）**：以节点关系呈现技术体系，结合 Pinia/G6 构建交互式知识网络。
+- **动态/社区（xiaou-moment、xiaou-community）**：用户动态流、话题标签、点赞/收藏、内容推荐权重与违规审核。
+- **通知 & IM（xiaou-notification、xiaou-chat）**：系统/私信/群聊，WebSocket 实时消息、撤回、封禁、敏感词检测。
+- **OJ 判题（xiaou-oj）**：支持题目管理、在线判题、提交记录、赛事报名、实时榜单与赛后评分预估。
+- **敏感词/风控（xiaou-sensitive、xiaou-sensitive-api）**：分词匹配、命中日志、策略管理、WebHook 回调。
+- **版本与运营（xiaou-version、xiaou-moyu、xiaou-points、lottery）**：版本里程碑、摸鱼打卡、积分规则、抽奖活动与奖品管理。
+
+### 运维与安全
+
+- SQL 慢查询与操作审计、行为日志沉淀到 `xiaou.monitor`，支持异步写入与保留周期配置。
+- `AI-DOCS/Deployment/监控告警/Prometheus监控部署指南.md` 提供 Prometheus + Grafana 一键部署说明，Actuator/Micrometer 暴露业务指标。
+- Dockerfile、Nginx 反向代理配置与多环境配置文件（dev/prod）一应俱全，便于快速上线。
+
+## 🏗️ 技术架构
+
+### 后端技术栈
+
+- Spring Boot 3.4.4、Spring MVC、Spring Validation、Sa-Token 鉴权。
+- MySQL 8 + MyBatis（含 PageHelper）、多数据源、数据库脚本在 `sql/`。
+- Redis 6 + Redisson（分布式锁、延迟队列），异步任务/定时调度。
+- SpringDoc OpenAPI 3、Knife4j、Hutool、Lombok、MapStruct 等辅助库。
+- 日志监控：Micrometer、Prometheus Exporter、SQL/操作日志框架、自定义监控配置。
+- AI 工程：LangChain4j、LangGraph4j、LlamaIndex 检索网关、模板化 Prompt 治理与结构化结果解析。
+
+### 前端技术栈
+
+- Vue 3 + Composition API + TypeScript（可选），构建工具 Vite 5。
+- Element Plus 组件库、Pinia 状态、Vue Router 4、Axios 网络层、SCSS/Sass。
+- 可视化：ECharts、D3、@antv/g6、markdown-it、highlight.js、nprogress。
+- 代码规范：ESLint + eslint-plugin-vue + Prettier（可选），统一 `.editorconfig`。
+
+### 基础设施
+
+- MySQL、Redis、对象存储（本地/Tencent COS 等）、Nginx、Docker、GitHub Actions（可扩展）。
+- Prometheus + Grafana + Alertmanager、日志采集（logs/）、监控告警配置。
+
+## 📦 模块一览
+
+| 模块 | 说明 | 关键功能 |
+| --- | --- | --- |
+| xiaou-bootstrap | 启动壳 | Spring Boot 入口、运行配置、线程池和可执行 JAR |
+| xiaou-application | 应用编排 | 跨领域用例、聚合查询和端口适配器 |
+| xiaou-common-core | 核心契约 | `Result`、分页、业务异常、常量和纯工具 |
+| xiaou-common-web | Web 适配 | 全局异常、HTTP 状态映射、CORS 和资源映射 |
+| xiaou-common-security | 安全能力 | Sa-Token 双端鉴权、管理权限切面和密码工具 |
+| xiaou-common-cache | 缓存能力 | `CacheStore`、`TextStateStore` 与 Redis 适配器 |
+| xiaou-common-persistence | 持久化基础 | MyBatis/PageHelper 与 SQL 日志配置 |
+| xiaou-common | 兼容聚合 | 旧业务模块迁移期间聚合基础模块，不承载新实现 |
+| xiaou-resilience | 韧性执行 | 有界并发、超时、降级和来源状态结果 |
+| xiaou-ai | 统一 AI 服务 | AI Runtime 编排、Prompt/RAG/Schema 治理、AI 结果兜底与治理总览 |
+| xiaou-system | 系统管理 | 组织、角色、菜单、字典、参数、审计日志 |
+| xiaou-user / xiaou-user-api | 用户中心 | 用户注册、认证、资料、登录态 API 隔离 |
+| xiaou-interview | 面试题库 | 题目、试卷、刷题记录、统计、推荐 |
+| xiaou-community | 社区/岗位 | 帖子、岗位、任务调度、运营后台 |
+| xiaou-moment | 动态广场 | 动态发布、点赞、收藏、推荐算法、审核 |
+| xiaou-blog | 博客 | Markdown 编辑、标签、归档、评论 |
+| xiaou-codepen | 代码工坊 | 代码模板、在线运行、作品管理、Fork/收藏 |
+| xiaou-resume | 在线简历 | 模板库、模块化填写、版本历史、多格式导出 |
+| xiaou-filestorage | 文件存储 | 本地/云存储、上传、分片、权限、文本预览与统计 |
+| xiaou-learning-asset | 学习资产转化引擎 | 内容转资产、候选审核、发布记录、统计分析 |
+| xiaou-notification | 消息中心 | 系统通知、私信、消息状态、推送 |
+| xiaou-chat | IM 聊天 | WebSocket 实时通信、撤回、禁言、房间 |
+| xiaou-sensitive / xiaou-sensitive-api | 敏感词 | 词库维护、命中记录、外部 API |
+| xiaou-knowledge | 知识图谱 | 节点管理、图谱渲染、知识库 |
+| xiaou-version | 版本档案 | 版本时间线、发布记录、变更说明 |
+| xiaou-moyu | 摸鱼面板 | 日常任务、健康打卡、工作台 |
+| xiaou-points | 积分体系 | 积分规则、账户、排行榜、明细、CSV 导出 |
+| xiaou-plan | 计划打卡 | 个人计划、每日打卡、连续统计、提醒通知 |
+| xiaou-oj | OJ 判题 | 题目管理、在线判题、提交记录、赛事榜单、评分预估 |
+| xiaou-mock-interview | AI模拟面试 | 多方向面试、AI出题/评价、求职闭环、Offer 跟踪 |
+| xiaou-monitor | SQL/监控 | SQL 采集、慢查询、日志审计、观测面板 |
+
+### 前端应用
+
+|| 模块 | 说明 | 启动命令 |
+|| --- | --- | --- |
+|| vue3-admin-front | 管理后台，Element Plus + Pinia | `npm install && npm run dev`（端口 3000） |
+|| vue3-user-front | 用户端，组件与依赖同后台 | `npm install && npm run dev`（端口 3001） |
+
+### 桌面应用（Electron）
+
+|| 模块 | 说明 | 打包命令 |
+|| --- | --- | --- |
+|| code-nest-admin-desktop | 管理端桌面应用 | `npm run dist:win`（生成 Windows exe） |
+|| code-nest-user-desktop | 用户端桌面应用 | `npm run dist:win`（生成 Windows exe） |
+
+## 🗂️ 目录结构
+
+```
+Code-Nest/
+├── docker/                     # 后端 Dockerfile、compose 示例
+├── AI-DOCS/
+│   ├── PRD/                    # 各业务模块 PRD/需求文档
+│   ├── Technical/              # 技术文档
+│   ├── Testing/                # 测试文档
+│   ├── Deployment/             # 部署文档
+│   ├── User/                   # 用户文档
+│   ├── Development/            # 开发文档
+│   └── Archive/                # 归档文档
+├── logs/                       # 运行期日志（开发环境可忽略）
+├── sql/
+│   ├── MySql/
+│   │   ├── code_nest.sql       # 最新完整结构（全量建表）
+│   │   └── code_nest_data.sql  # 最新初始化数据（可重复执行）
+│   ├── v1.8.0/                 # OJ 相关增量脚本
+│   ├── v1.8.3/                 # 闭环中台与SQL优化相关增量脚本
+│   └── v1.8.4/                 # 学习资产转化引擎增量脚本
+├── vue3-admin-front/           # 管理端前端
+├── vue3-user-front/            # 用户端前端
+├── release/                    # 发布清单（版本与制品单一事实源）
+├── xiaou-bootstrap/            # Spring Boot 启动壳与运行配置
+├── xiaou-application/          # 跨领域应用编排
+├── xiaou-common-*/             # core/web/security/cache/persistence 基础模块
+├── xiaou-resilience/           # 聚合查询韧性执行
+├── xiaou-*/                    # 业务子模块（interview、blog、resume…）
+├── pom.xml                     # 多模块 Maven 配置
+└── README.md
+```
+
+## 🚀 Quick Start
+
+### 环境要求
+
+- Java 17+
+- Node.js 18+（Vite 5 推荐）
+- Maven 3.8+
+- MySQL 8.0+
+- Redis 6.0+
+- 可选：Docker、Nginx、Prometheus/Grafana
+
+### 1. 克隆项目
+
+```bash
+git clone https://github.com/your-username/Code-Nest.git
+cd Code-Nest
+```
+
+### 2. 初始化数据库
+
+```bash
+mysql -u root -p
+
+CREATE DATABASE code_nest DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE code_nest;
+SOURCE sql/MySql/code_nest.sql;
+SOURCE sql/MySql/code_nest_data.sql;
+-- 如需增量升级，请按版本顺序执行 sql/v1.x.x/*.sql
+```
+
+### 3. 配置文件
+
+编辑 `xiaou-bootstrap/src/main/resources/application-dev.yml`（本地密钥放在被忽略的 `application-sec.yml`）：
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/code_nest?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    username: your_mysql_user
+    password: your_mysql_password
+  data:
+    redis:
+      redisson:
+        config: |
+          singleServerConfig:
+            address: "redis://127.0.0.1:6379"
+            database: 3
+
+sa-token:
+  token-name: Authorization
+  token-prefix: Bearer
+  timeout: 604800
+  activity-timeout: 1800
+
+jwt:
+  secret: ${XIAOU_JWT_SECRET}
+
+xiaou:
+  monitor:
+    enabled: true
+    slow-sql-threshold: 1000
+    async-save: true
+    retention-days: 30
+```
+
+按需补充短信/OSS/COS 等密钥。生产环境请通过环境变量或 `application-sec.yml` 提供 `XIAOU_JWT_SECRET`，不要把真实密钥提交到仓库。
+
+### 4. 启动后端
+
+```bash
+# 一键编译
+mvn clean package -DskipTests
+
+# 构建唯一可执行后端制品
+mvn -pl xiaou-bootstrap -am clean package -DskipTests
+
+# 或直接运行打包后的 jar
+java -jar xiaou-bootstrap/target/xiaou-bootstrap-v2.5.8.jar --spring.profiles.active=prod
+```
+
+- API 根地址：`http://localhost:9999/api`
+- Swagger / Knife4j：`http://localhost:9999/api/swagger-ui.html`
+
+### 4.1 启动 AI 检索服务（启用 RAG 时需要）
+
+如果只是启动 Java 主项目而不走知识库检索，可以先不启动这一段，并将 `xiaou.ai.rag.enabled=false` 或环境变量 `XIAOU_AI_RAG_ENABLED=false`。
+
+如果要联调以下能力，则需要同时启动独立的 Python 检索服务：
+
+- 管理后台 `AI 配置与观测` 页面中的 `LlamaIndex 检索调试`
+- 模拟面试、SQL 优化、求职作战台等场景中的 RAG 召回
+
+推荐在仓库根目录使用 PowerShell 脚本启动：
+
+```powershell
+# 首次本地启动，自动创建 .venv；如需安装依赖可额外加 -InstallDependencies
+.\scripts\ai\start-llamaindex-service.ps1 -ApiKey "your-rag-key"
+```
+
+如果你希望把 “RAG sidecar + Java 主服务” 一起拉起，推荐直接使用：
+
+```powershell
+.\scripts\ai\start-ai-dev-stack.ps1 -RagApiKey "your-rag-key" -ImportSampleKnowledge
+```
+
+这条命令会：
+
+- 新开一个 PowerShell 窗口启动 `llamaindex-service`
+- 在当前终端注入 Java 侧所需的 `XIAOU_AI_RAG_*` 环境变量
+- 可选导入样例知识
+- 直接运行 `mvn -pl xiaou-bootstrap -am spring-boot:run`
+
+导入一份本地样例知识：
+
+```powershell
+.\scripts\ai\import-sample-knowledge.ps1 -ApiKey "your-rag-key" -Replace
+```
+
+Java 侧配置需要与之对应：
+
+```yaml
+xiaou:
+  ai:
+    rag:
+      enabled: true
+      endpoint: http://127.0.0.1:18080
+      api-key: your-rag-key
+      default-top-k: 5
+```
+
+脚本说明：
+
+- [start-llamaindex-service.ps1](/D:/onenodes/githubprojectstart/Code-Nest/scripts/ai/start-llamaindex-service.ps1)：启动独立检索服务，可选自动建虚拟环境与安装依赖。
+- [start-ai-dev-stack.ps1](/D:/onenodes/githubprojectstart/Code-Nest/scripts/ai/start-ai-dev-stack.ps1)：面向 Windows 本地联调的一键启动脚本，负责拉起 RAG sidecar 并接着启动 Java 主服务。
+- [import-sample-knowledge.ps1](/D:/onenodes/githubprojectstart/Code-Nest/scripts/ai/import-sample-knowledge.ps1)：把 [sample-documents.json](/D:/onenodes/githubprojectstart/Code-Nest/llamaindex-service/data/sample-documents.json) 导入到本地知识库。
+- 检索服务健康检查：`http://127.0.0.1:18080/health`
+
+补充说明：
+
+- 只用普通后台管理、社区、非 RAG AI 场景时，不需要额外启动 Python sidecar。
+- 只要开启了知识库检索、后台 RAG 调试、或需要验证 `LlamaIndex` 管理接口，就需要同步启动 sidecar。
+
+### 5. 启动前端
+
+#### 管理后台
+
+```bash
+cd vue3-admin-front
+npm install
+npm run dev
+```
+
+访问 `http://localhost:5173`
+
+#### 用户端
+
+```bash
+cd vue3-user-front
+npm install
+npm run dev
+```
+
+访问 `http://localhost:5174`
+
+### 6. 常用账号
+
+| 端 | 账号 | 密码 | 备注 |
+| --- | --- | --- | --- |
+| 管理后台 | `admin` | `123456` | 可在用户管理中修改 |
+| 用户端 | 已内置演示数据 | `sql/MySql/code_nest_data.sql` 中提供 | 也可自行注册 |
+
+### 7. 构建与部署产物
+
+```bash
+# 后端
+mvn clean package -DskipTests
+
+# 前端
+cd vue3-admin-front && npm run build
+cd vue3-user-front && npm run build
+```
+
+静态资源输出至 `dist/`，可由 Nginx 或对象存储托管。
+
+## 🔧 配置与运维
+
+### Sa-Token 关键配置
+
+```yaml
+sa-token:
+  token-name: Authorization
+  token-style: uuid
+  is-share: false
+  is-concurrent: true
+  token-prefix: Bearer
+  alone-redis:
+    host: 127.0.0.1
+    port: 6379
+    database: 4
+```
+
+### Redis / Redisson
+
+```yaml
+spring:
+  data:
+    redis:
+      redisson:
+        config: |
+          singleServerConfig:
+            address: "redis://127.0.0.1:6379"
+            database: 3
+            password: your_redis_password
+```
+
+### SQL 与监控
+
+```yaml
+xiaou:
+  monitor:
+    enabled: true
+    slow-sql-threshold: 800
+    async-save: true
+    retention-days: 30
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+```
+
+- Prometheus 抓取地址：`http://<host>:9999/api/actuator/prometheus`
+- Grafana Dashboard/报警配置参考 `AI-DOCS/Deployment/监控告警/Prometheus监控部署指南.md`
+
+### 日志
+
+- 默认输出到 `logs/` 目录，按日期分片。
+- Sa-Token、SQL、操作日志支持异步保存，可在 `application-*.yml` 中自定义。
+
+## ☁️ 部署指南
+
+### Docker
+
+```bash
+# 构建镜像
+docker build -t code-nest:v2.5.8 -f docker/Dockerfile .
+
+# 运行容器
+docker run -d \
+  --name code-nest \
+  -p 9999:9999 \
+  -e SPRING_PROFILES_ACTIVE=prod \
+  --env-file docker/env/example.env \
+  code-nest:v2.5.8
+```
+
+如果要把 MySQL / Redis / Java 主服务 / `llamaindex-service` 一起编排起来，推荐使用：
+
+```bash
+cp docker/ai/.env.example docker/ai/.env
+docker compose -f docker/ai/docker-compose.yml --env-file docker/ai/.env up -d --build
+```
+
+说明：
+
+- [docker/Dockerfile](/D:/onenodes/githubprojectstart/Code-Nest/docker/Dockerfile)：Java 主服务镜像构建文件。
+- [docker/env/example.env](/D:/onenodes/githubprojectstart/Code-Nest/docker/env/example.env)：`docker run` 示例环境变量模板。
+- [docker/ai/docker-compose.yml](/D:/onenodes/githubprojectstart/Code-Nest/docker/ai/docker-compose.yml)：AI 联调全栈编排。
+- [docker/ai/README.md](/D:/onenodes/githubprojectstart/Code-Nest/docker/ai/README.md)：Compose 使用说明。
+
+### Nginx
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+
+    # 管理端静态资源
+    location /admin/ {
+        root /opt/code-nest/vue3-admin-front/dist;
+        try_files $uri $uri/ /admin/index.html;
+    }
+
+    # 用户端静态资源
+    location / {
+        root /opt/code-nest/vue3-user-front/dist;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # API 转发
+    location /api/ {
+        proxy_pass http://127.0.0.1:9999/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+## 📚 文档与资料
+
+- `AI-DOCS/PRD/`：覆盖简历、代码工坊、IM、积分、抽奖、知识图谱、敏感词、SQL 优化等 20+ 模块的产品文档。
+- `AI-DOCS/Archive/历史版本/2026-04-20-ai-runtime-replatform-design.md`：AI Runtime 从 Coze 迁移到 `LangChain4j + LangGraph4j + LlamaIndex` 的完整设计文档。
+- `AI-DOCS/Archive/历史版本/2026-04-20-ai-runtime-replatform.md`：AI Runtime 重构落地计划与实施拆解。
+- `AI-DOCS/Archive/历史版本/2026-04-20-ai-prompt-governance.md`：Prompt / RAG Query / Structured Output 的工程化治理规范。
+- `AI-DOCS/Archive/历史版本/2026-04-20-ai-regression-eval.md`：AI 黄金样例回归、历史记录与评测约定。
+- `AI-DOCS/Archive/历史版本/2026-04-26-v2.1.0-growth-intelligence-design.md`：v2.1.0 Growth Intelligence 双主线设计说明。
+- `AI-DOCS/Archive/历史版本/2026-04-26-v2.1.0-growth-intelligence.md`：v2.1.0 Growth Intelligence 实施计划与验证范围。
+- `AI-DOCS/Archive/历史版本/2026-04-26-v2.2.0-code-quality-hardening.md`：v2.2.0 工程质量优化计划、优化点清单与验证范围。
+- `AI-DOCS/PRD/学习资产转化引擎模块PRD-v1.0.0.md`：内容转学习资产的产品范围、链路设计与实现边界。
+- `AI-DOCS/PRD/OJ赛事系统PRD-v1.0.0.md`：OJ 赛事系统（周赛/挑战赛）需求定义与里程碑。
+- `AI-DOCS/Deployment/监控告警/Prometheus监控部署指南.md`：Prometheus + Grafana 安装、指标、告警策略。
+- `sql/MySql/code_nest.sql`：最新完整结构脚本。
+- `sql/MySql/code_nest_data.sql`：汇总初始化数据脚本（可重复执行）。
+- `sql/v2.4.0/`：管理员统一 Agent 运行时的审计、会话上下文、幂等和权限增量脚本。
+- `sql/v2.5.0/`、`sql/v2.5.2/`、`sql/v2.5.3/`：Growth Coach、业务成长漏斗和生产治理增量脚本。
+- `sql/MIGRATIONS.md`：checksum ledger 迁移执行、baseline 和发布窗口说明。
+- `sql/v1.8.0~v1.8.4/`：历史增量脚本（OJ、求职作战台、闭环中台、学习资产转化引擎等）。
+- `pom.xml`：多模块管理、版本统一、Flatten 插件配置。
+- `docker/`：容器化部署示例。
+
+## 📝 更新日志
+
+仅列出最近版本，更多历史可查看 `git log`。
+
+### v2.5.8 AI Reasoning Configuration
+
+- **运行参数**：OpenAI-compatible 请求支持显式 `reasoning_effort`，生产可选择 `max` 等受支持等级。
+- **配置可靠性**：请求体契约测试覆盖全局与场景级 token 上限，非法推理等级和代理地址会被拒绝；可选代理仅作用于 AI provider。
+- **迁移边界**：不写数据库，schema 基线保持 `v2.5.3`。
+
+### v2.5.7 Startup Hotfix
+
+- **启动可靠性**：SRE Outbox Worker 的主构造器显式参与 Spring 注入，生产启动不再因兼容构造器歧义失败。
+- **发布可靠性**：容量治理使用 sudoers 匹配的绝对脚本路径，并增加对应契约测试。
+- **迁移边界**：不写数据库，schema 基线保持 `v2.5.3`。
+
+### v2.5.6 Architecture Governance
+
+- **模块职责**：启动、公共基础、SRE、通知和应用编排均有明确所有权，依赖方向由架构脚本守护。
+- **契约与路由**：双前端共享响应/错误/DTO 契约，路由入口按业务切片组合。
+- **发布可追溯**：`release/manifest.json` 是版本、schema、Docker 与制品布局的单一事实源。
+
+### v2.5.3 Growth Coach And Production Governance
+
+- **生产可追溯**：统一版本一致性检查、release bundle `RELEASE` 元数据和发布包 smoke test。
+- **数据库治理**：迁移执行器记录 checksum、状态、耗时和失败原因；生产默认跳过写库，显式开启才应用。
+- **运行时韧性**：Growth Coach 有界并发与短缓存、事件契约版本化、远程来源 SSRF 防护、AI 并发 permit 和失败回滚。
+
+### v2.4.3 Guided First Week And Home Overview
+
+- **首次登录闭环**：岗位、学习阶段和每周投入时间会直接生成首周自动驾驶任务。
+- **首页聚合接口**：`/user/home/overview` 用服务端并发与分区降级替代浏览器侧十个并行请求。
+- **行动优先首页**：今天的计划动作前置，版本更新移至次级内容区域。
+- **按需组件解析**：用户端 Element Plus 改为 Vite 自动按需解析，仍保留加载指令与消息组件支持。
+- **数据库迁移**：执行 `sql/v2.4.3/growth_autopilot_onboarding.sql` 以保存首周学习阶段。
+
+### v2.4.2 UX And Flow Refinement
+
+- **移动端可用性**：修复导航抽屉高度和滚动，登录表单在窄屏首屏优先出现。
+- **导航重组**：主入口按今天、学习、求职、社区组织，较长菜单归入练习与工具、创作和更多。
+- **行动优先**：求职闭环先展示下一步行动，面试题库先展示可进入的题单列表。
+- **异常降噪**：首页聚合请求静默失败，由模块级状态提示数据暂不可用，登录过期流程保持不变。
+- **版本基线升级**：Maven、共享设计系统、双前端、文档站、Jar 与 Docker 示例统一升级到 `v2.4.2`。
+
+### v2.4.1 Architecture And Documentation Hardening
+
+- **共享前端基础**：双前端改为复用独立设计系统包，避免组件与主题继续双份漂移。
+- **缓存与并发治理**：使用可注入缓存边界和 Spring 托管执行器替代静态全局工具。
+- **热点链路优化**：学习、社区、朋友圈、摸鱼、抽奖和验证码链路减少重复查询与缓存往返。
+- **测试补强**：为学习驾驶舱、WebSocket 票据、Redis 值存储和朋友圈服务新增回归覆盖。
+- **文档工程化**：129 个页面完成分类重组，VitePress 增加响应式主题、动态基线和自动审计。
+- **版本基线升级**：Maven、共享设计系统、双前端、文档站、Jar 与 Docker 示例统一升级到 `v2.4.1`。
+
+### v2.4.0 Unified Backend Agent Runtime
+
+- **统一后端编排**：单一聊天接口完成 LLM 规划、工具注册、策略、执行和审计，前端保持薄边界。
+- **通用扩展契约**：新增工具通过 definition/schema 注册，不增加前端分组或逐工具硬编码路由。
+- **高风险动作保护**：写工具必须经过预览、精确确认、权限、幂等和审计状态机。
+- **会话与输入防护**：同名会话按管理员隔离，统一聊天请求在进入 planner 前执行长度校验。
+- **真实 AI 验收**：当前 26/26 个生产工具通过真实 `gpt-5.5` 测试，两个写工具完成数据库结果回查。
+- **测试与 CI 收口**：后端、双前端、AI、RAG、仓库卫生和发布构建进入统一评测入口。
+- **版本基线升级**：Maven、双前端、文档站、Jar 与 Docker 示例统一升级到 `v2.4.0`。
+
+### v2.3.2 🧯 Production Patch
+
+- 🧾 **版本历史重建**：线上版本历史按 Git 提交与版本分支重新整理为 `v1.0.0` 至 `v2.3.1` 的 27 条发布记录。
+- 📄 **版本时间轴分页修复**：修复用户端与管理端版本列表分页总数不准确的问题，时间轴现在可以正确返回 27 条记录和 6 页数据。
+- 🏠 **首页首屏修复**：移除首页 hero 区错误的 reveal 隐藏状态，修复线上首页首屏大面积空白问题。
+- 📦 **版本基线升级**：后端 Maven、管理端前端、用户端前端、文档站、README Jar/Docker 示例统一升级到 `v2.3.2`。
+
+### v2.3.1 🚢 Production CI/CD
+
+- ✅ **统一 CI 校验**：新增后端 Maven、双前端、文档站和脚本语法检查流水线。
+- 🚀 **生产自动部署**：版本分支/tag 或手动 workflow 可构建 release bundle 并同步到服务器。
+- 🧯 **备份与回滚**：服务器部署脚本会备份当前 Jar 和双前端静态资源，健康检查失败自动回滚。
+- 🔐 **Secrets 收口**：SSH 私钥、服务器地址、部署用户等只通过 GitHub Secrets 注入，不进入仓库。
+- 📚 **运维文档补齐**：新增生产 CI/CD 文档，明确触发、目录、回滚和排障方式。
+- 📦 **版本基线升级**：后端 Maven、管理端前端、用户端前端、文档站、README Jar/Docker 示例统一升级到 `v2.3.1`。
+
+### v2.3.0 🎨 UI Shell and Interview Operations
+
+- 🎛️ **主题配置轻量化**：双端主题切换统一为下拉式配置，减少顶部工具区占位。
+- 🧭 **导航对齐修复**：统一管理端与用户端顶部导航居中策略，修复学习/创作菜单图标偏移。
+- 🧱 **内容页宽屏优化**：技术社区、朋友圈页面改为占满主内容区，提升桌面端阅读与浏览密度。
+- 🔌 **聊天室连接修复**：WebSocket 地址按当前访问源推导，开发代理启用 `ws`，改善线上反复重连问题。
+- 🔐 **管理端登录与密码体验收口**：移除登录页硬编码账号密码展示，重置密码改为管理员显式输入。
+- 🧩 **面试分类管理修复**：统一分类 ID、状态字段和树结构数据处理，修复分类管理操作异常。
+- 🛠️ **迁移与部署工具沉淀**：新增 You-Deserve 题库迁移工具和双前端快速部署脚本；线上试导入数据已回滚删除。
+- 📦 **版本基线升级**：后端 Maven、管理端前端、用户端前端、文档站、README Jar/Docker 示例统一升级到 `v2.3.0`。
+
+### v2.2.2 🛠️ Governance and Workflow Hardening
+
+- 🤝 **GitHub 协作规范落地**：新增贡献指南、变更日志、安全策略、行为准则、发布流程、Issue 模板和 PR 模板。
+- 📚 **文档站维护基线增强**：补齐发布交接、环境变量、验证场景、模块手册和文档同步资料。
+- ✅ **学习小组工作流契约对齐**：修复任务、打卡、讨论、成员、统计等前后端字段和刷新链路。
+- 🧼 **仓库卫生治理**：新增 `.gitattributes`，收敛本地生成脚本、构建日志和 Windows 保留名残留文件。
+- 📦 **版本基线升级**：后端 Maven、管理端前端、用户端前端、文档站、README Jar/Docker 示例统一升级到 `v2.2.2`。
+
+### v2.2.1 🛠️ Code Quality Hardening
+
+- 🧱 **全局异常处理增强**：补齐更多 Spring MVC、参数解析、文件上传与非法参数异常，统一错误码出口。
+- 🧹 **CodePen 控制器瘦身**：用户端与管理端 Controller 移除重复异常包装，减少样板代码并提升可维护性。
+- ✅ **请求参数校验补齐**：为 CodePen 核心 DTO 增加非空、长度、范围和正整数校验，提前拦截非法输入。
+- 🧰 **公共工具治理**：优化 Redis 工具返回语义、集合计数、Redisson 过时 API、JSON 泛型与线程池泛型噪声。
+- 🧪 **类型安全收敛**：文件存储、博客配置、聊天 WebSocket、迁移任务与 go-judge 客户端移除 raw Map/List 强转。
+- 🗄️ **Mapper SQL 治理**：`xiaou-sql-optimizer`、`xiaou-team`、`xiaou-oj`、`xiaou-community`、`xiaou-interview` 生产 Mapper 改用显式列清单，并修正小组每日统计字段映射。
+- 🔐 **安全配置收敛**：JWT secret 改为环境变量优先，密钥生成工具同步输出生产配置指引。
+- 🧭 **前端规范入口落地**：新增 `.editorconfig` 与双前端 ESLint 配置，双端 ESLint 达到 `0 error / 0 warning`。
+- 🚦 **前端构建治理**：新增 Vite 命名拆包、Sass modern API、Markdown 高亮按需语言注册与 chunk 预算，双端生产构建无警告。
+- 📦 **版本基线升级**：后端 Maven、管理端前端、用户端前端、README Jar/Docker 示例统一升级到 `v2.2.1`。
+
+### v2.1.2 🧯 聊天室防刷增强
+
+- 🚦 **消息发送限流**：新增 Redis 固定窗口限流，默认每个用户 10 秒最多 8 条消息，异常脚本或刷屏会收到结构化错误。
+- 🧊 **输入状态降噪**：`TYPING` 事件纳入限流，降低高频输入状态广播对 WebSocket 的压力。
+- 🧱 **消息入库校验**：文本和图片消息按类型校验空值、长度和图片 URL 协议，拦截非法或异常消息。
+- 🔁 **失败态闭环**：用户端收到限流、校验失败等 WebSocket 错误时，会把对应本地消息标记失败并保留提示。
+- 📦 **版本基线升级**：后端 Maven、管理端前端、用户端前端、README Jar/Docker 示例统一升级到 `v2.1.2`。
+
+### v2.1.1 🛡️ 安全加固与聊天室稳定性
+
+- 🔐 **文件接口权限收口**：上传、删除、列表与存在性检查要求登录；公开文件可匿名读取，私有文件读取需登录校验。
+- 🎫 **WebSocket 一次性票据**：用户端先通过登录态申请 60 秒短期票据，聊天室握手消费票据后立即失效，避免长期 Token 暴露在 URL 中。
+- 💬 **实时消息体验补齐**：服务端新增 PONG 心跳响应与 TYPING 输入中广播，并修复消息 ACK 回填本地临时消息 ID 的兼容逻辑。
+- 🌐 **CORS 配置化**：HTTP 与 WebSocket 默认跨域来源改为本地开发白名单，并支持通过 `xiaou.cors.allowed-origin-patterns` 扩展生产域名。
+- 🧼 **前端 HTML 净化**：Markdown 工具统一接入 DOMPurify，并补齐多处 `v-html` 用户内容展示的转义与净化。
+- 📦 **版本基线升级**：后端 Maven、管理端前端、用户端前端、README Jar/Docker 示例统一升级到 `v2.1.1`。
+
+### v2.1.0 🚀 Growth Intelligence
+
+- 🧭 **AI 学习成长驾驶舱 2.1**：新增成长分、等级、趋势说明和 AI 学习复盘，帮助用户快速判断本周学习节奏。
+- 📊 **能力雷达与短板诊断**：基于 OJ、题库、闪卡、计划、积分五模块完成率生成能力结构和短板队列。
+- ✅ **今日任务闭环**：从下一步建议中提炼今日可执行任务，补齐“看到问题 -> 立即行动”的体验链路。
+- 🛡️ **AI Runtime 质量中心**：后台 AI 治理升级为质量分 + 覆盖矩阵 + 运行洞察 + 风险队列，便于定位 Prompt、Schema、RAG、回归准备度和线上运行问题。
+- 📦 **版本基线升级**：后端 Maven、管理端前端、用户端前端、README Jar/Docker 示例统一升级到 `v2.1.0`。
+
+### v2.0.1 🔖 功能增强与版本升级
+
+- 🚀 **发布版本升级**：后端 Maven 版本、管理端前端与用户端前端统一升级到 `v2.0.1`。
+- 📦 **构建示例同步**：后端 Jar 运行命令与 Docker 镜像标签同步更新为 `v2.0.1`。
+- 🤖 **AI Runtime 轻量治理**：新增 AI 治理总览接口与管理端页面，展示 AI Runtime 场景目录、配置状态、兜底覆盖率、风险等级与治理建议。
+- 🔁 **求职闭环二期**：闭环状态机新增 `OFFER_TRACKING` 阶段，复盘完成后可继续推进投递记录、Offer 跟踪和反馈沉淀。
+- 🏆 **OJ 赛事增强**：赛事榜单新增表现分、评分变化与赛后预估评分，帮助参赛者快速理解比赛表现。
+- 🧰 **管理端体验补齐**：文件管理支持文本类文件在线预览，积分明细支持按当前筛选条件导出 UTF-8 CSV。
+- 🧭 **升级分支准备**：从 `master` 开出 `v2.0.1` 分支，作为小版本功能增强与发布验证基线。
+
+### v2.0.0 🤖 AI Runtime 全面重构
+
+- ♻️ **彻底移除 Coze 运行链路**：仓库主干不再保留 Coze SDK、配置、工具类和历史工作流依赖，统一收口到新 AI Runtime。
+- 🧠 **统一 AI 技术栈**：`xiaou-ai` 完成 `LangChain4j + LangGraph4j + LlamaIndex` 分层重构，覆盖社区摘要、模拟面试、求职作战台、SQL 优化等核心 AI 场景。
+- 🧩 **Prompt 工程化治理**：新增 Prompt Catalog、RAG Query Catalog、Structured Schema Catalog，支持模板化、版本化、结构化输出校验与后台在线调试。
+- 📚 **知识库 sidecar 落地**：引入独立 `llamaindex-service`，支持知识库健康检查、检索调试、样例知识导入、自定义文档导入、导出、单删和批量删除。
+- 🛠️ **后台 AI 配置与观测中心**：新增 OpenAI Compatible 中转站连通性测试、AI 运行时配置查看、运行指标总览、最近调用、Prompt/RAG 调试、黄金样例回归。
+- ✅ **AI 质量治理补齐**：增加黄金样例回归、最近一次执行结果持久化、最近历史回看、Prompt/RAG/Schema 可观测治理，便于模型替换和提示词迭代时快速验收。
+- 🚚 **本地联调与部署增强**：新增 `scripts/ai` 启动脚本、Docker 相关资源和示例环境配置，降低本地启动 Java 主服务与 RAG sidecar 的成本。
+
+### v1.8.2 🧠 学习资产转化引擎
+
+- 🆕 **学习资产转化引擎模块**：新增 `xiaou-learning-asset` 模块，提供转化记录、候选资产、发布日志、审核流转与统计分析能力。
+- 🪄 **多来源内容一键转资产**：用户可从博客文章、社区帖子、CodePen 作品、AI 模拟面试报告发起转化，统一生成个人学习资产记录。
+- 📚 **用户端学习资产中心**：新增 `/learning-assets` 页面，支持查看记录、编辑候选、丢弃/恢复、确认发布，并提供学习与计划承接入口。
+- 🛡️ **管理端审核与统计**：管理后台新增学习资产审核台与统计页，支持候选内容编辑、通过/驳回、合并与质量概览。
+- 🔔 **跨模块通知联动**：学习资产发布摘要、审核通过、合并、驳回结果统一接入通知中心，打通内容消费到学习闭环。
+- 🗄️ **数据库与文档补齐**：新增 `sql/v1.8.4/learning_asset.sql`，并补充 `AI-DOCS/PRD/学习资产转化引擎模块PRD-v1.0.0.md` 作为产品说明。
+
+### v1.8.1 🔁 求职闭环中台与作战链路升级
+
+- 🆕 **求职闭环中台（Career Loop）**：新增后端状态机与会话模型（阶段、时间线、动作清单、快照），统一管理 `JD解析 -> 简历匹配 -> 计划生成 -> 计划执行 -> 面试完成 -> 复盘完成` 全链路。
+- 🆕 **闭环用户端页面**：新增 `/career-loop`，支持阶段总览、动作清单、风险建议、时间线，并补充雷达图与近4周热力图可视化。
+- 🔗 **跨模块事件联动**：Job Battle 与 AI 模拟面试关键节点自动推送闭环事件；作战台支持“同步到闭环”和“查看闭环进度”。
+- 🎯 **作战台体验强化**：历史计划入口前置、步骤串行校验优化、计划生成结果升级为卡片+时间线+表格+风险区的可视化展示。
+- 🗄️ **SQL脚本整理与数据脚本补齐**：`sql/MySql/code_nest.sql` 作为最新结构脚本，新增 `sql/MySql/code_nest_data.sql` 汇总初始化数据，并补充 `v1.8.3` 增量脚本。
+
+### v1.8.0 🏆 OJ赛事系统（周赛/挑战赛）落地
+
+- 🆕 **赛事数据模型**：新增赛事相关数据结构，并将提交记录与 `contest` 维度打通，为周赛/挑战赛提供基础能力。
+- 🧩 **管理端赛事管理**：`vue3-admin-front` 新增 OJ 赛事管理页面，支持赛事配置与运营管理流程。
+- 🔌 **后端赛事服务与 API**：`xiaou-oj` 完成赛事服务层与持久化实现，同时开放管理员端与用户端赛事 API。
+- ✅ **参赛校验机制**：提交判题前新增参赛资格与规则校验，避免非参赛提交或越权提交。
+- 📊 **赛事排行榜计算**：新增赛事排名计算逻辑，支持按规则统计成绩并生成榜单。
+- 🖥️ **用户端赛事中心**：`vue3-user-front` 新增赛事中心页面并完成 API 集成，形成报名/参赛/查看榜单闭环。
+- 🧪 **工程质量补强**：补充赛事规则校验测试（TDD）与 PRD/进度文档，提升功能可维护性与可追踪性。
+
+### v1.7.2 🃏 闪卡与AI重构
+
+- 🆕 **闪卡模块**：`xiaou-flashcard` 新增闪卡学习功能，支持卡片式记忆法，提升知识点复习效率。
+- 🤖 **AI服务重构**：`xiaou-ai` 开始从历史 Coze 方案迁移到统一 AI 服务接口，为后续 `LangChain4j + LangGraph4j + LlamaIndex` 重构打基础。
+- 🔐 **登录安全优化**：统一登录检查逻辑，修复安全性问题，增强系统防护能力。
+- ⚡ **代码质量优化**：CodePen、积分模块代码质量与性能优化。
+- 🔧 **SQL优化模块**：`xiaou-sql-optimizer` 新增 SQL 优化分析能力。
+
+### v1.7.1 🖥️ 桌面应用支持
+
+- 🆕 **Electron 桌面端打包**：支持将 vue3-admin-front 和 vue3-user-front 打包为独立桌面应用（Windows exe / macOS dmg / Linux AppImage）。
+- 🖥️ **桌面端功能**：系统托盘、窗口状态记忆、本地存储、IPC 通信等原生桌面能力。
+- 🔧 **electron-vite 构建**：采用 electron-vite + electron-builder 技术栈，支持开发热重载与生产打包。
+- 👥 **小组头像上传**：学习小组支持自定义头像上传，优化组件交互体验。
+- 📝 **PRD 文档**：新增 `AI-DOCS/PRD/Electron桌面端打包PRD-v1.0.0.md`，完整记录桌面端技术方案。
+
+### v1.7.0 📚 学习效果追踪
+
+- 🌟 **掌握度标记**：支持不会/模糊/熟悉/已掌握四级评估，集成到做题模式。
+- 📈 **GitHub风格学习热力图**：可视化展示全年学习轨迹，集成到面试题库首页。
+- 🔔 **艾宾浩斯遗忘曲线复习提醒**：基于掌握度智能计算最佳复习时间。
+- 📊 **复习中心**：新增 `/interview/review` 页面，统一管理待复习题目（逾期/今日/本周）。
+- 🔥 **学习统计**：连续学习天数、最长连续、本月学习等数据展示。
+- 💬 **IM消息回复**：支持引用回复历史消息，优化在线用户管理。
+- 🗄️ **数据库**：新增 `interview_mastery_record`、`interview_daily_stats`、`interview_mastery_history` 表。
+
+### v1.6.3 🌟 AI模拟面试
+
+- 🆕 **AI模拟面试模块**：`xiaou-mock-interview` 新增完整的AI模拟面试功能，支持多方向、多难度、多风格的模拟面试体验。
+- 🤖 **双模式出题**：支持本地题库模式（从Interview题库抽题）和 AI出题模式（历史上曾调用 Coze 工作流，现已迁移至统一 AI Runtime）。
+- 📝 **实时AI评价**：用户回答后地获取AI评分、回答优点、改进建议，支持多种面试官风格（严厲/中性/温和）。
+- 🔄 **用户主动追问**：用户可在回答后主动请求追问，深入考察知识点掌握情况，每题最多追问2次。
+- 📊 **面试报告与统计**：面试结束后生成详细报告，包含AI总结、建议、各题得分明细；支持历史记录查询与用户统计面板。
+- 🎯 **题库选择**：本地模式下用户可手动选择题库集进行定向训练。
+- 🗂️ **前端页面**：新增面试入口页、配置页、面试进行页、报告页、历史记录页，全流程用户体验。
+- 🗄️ **数据库表**：新增mock_interview_direction、mock_interview_session、mock_interview_qa、mock_interview_user_stats等表。
+
+### v1.6.1 ✨
+
+- 🆕 **计划打卡模块**：`xiaou-plan` 支持个人计划创建、每日打卡、连续打卡统计、站内提醒通知、打卡记录查询等功能。
+- 🎨 **首页重新设计**：采用现代卡片式布局，新增 Hero 区域、核心功能展示、快速入口网格、特色亮点区域，提升视觉体验。
+- 📱 **面试详情页优化**：优化移动端适配与样式细节，提升手机端刷题体验。
+- 🗄️ **数据库脚本**：`sql/v1.6.1` 新增计划打卡相关表结构（user_plan、plan_checkin_record、plan_remind_task）。
+- 🔔 **定时任务**：计划模块集成提醒调度器，支持每日任务生成与站内通知推送。
+- 🔧 **导航优化**：首页快速入口新增「计划打卡」，顶部导航「学习」菜单新增入口。
+
+### v1.6.0 🚀
+
+- 🆕 **在线简历模块**：`xiaou-resume` 支持模板市场、模块化数据、版本快照、拖拽编辑与 PDF/Word/HTML 导出。
+- 🆕 **代码工坊（CodePen）**：支持前端/后端/SQL 演示、作品发布、Fork/收藏/点赞、后台运营、商业化配置。
+- 🆕 **可观测中心**：Prometheus + Grafana 监控整合 Micrometer/Actuator 指标、SQL 观测、告警与文档。
+- 🆕 **刷题洞察**：题库模块新增统计面板、算法难度画像、错题同步订阅。
+- 🗄️ **数据库脚本**：`sql/v1.6.0` 目录补充 CodePen/简历相关表结构。
+- 🔧 **导出 & 存储**：简历导出自动上传至 `xiaou-filestorage`，新增 COS/MinIO 适配。
+- 🔧 **内容体验**：社区/简历模板支持用户端/后台协同维护，README 与版本说明全面升级。
+
+### v1.5.0 🎉
+
+- 🆕 **博客系统**：Markdown 编辑、分类/标签、草稿箱、全文检索与评论互动。
+- 🆕 **抽奖中心**：活动配置、奖品管理、概率算法、中奖记录及后台运营。
+- 🆕 **标签体系统一**：社区/博客/动态共用标签维度，提供榜单与统计。
+- ✨ **动态功能增强**：动态收藏夹、推荐算法（点赞/评论/权重）、违规拦截、可视化报表。
+- 🛡️ **敏感词系统**：词库批量导入、命中记录、任务调度、接入 IM/动态/博客。
+- 📊 **监控重构**：Prometheus 指标拆分、JVM/HTTP/DB 监控、告警模板。
+- 🔐 **认证优化**：Token 生命周期管理、登录流程、统一异常语义。
+- 📦 **数据库更新**：新增博客、抽奖、标签、动态收藏等表结构。
+
+### v1.4.0 🚀
+
+- 🔐 **Sa-Token 全面接管**：JWT 全量迁移至 Sa-Token，双端账号体系、并发控制、路由鉴权、WebSocket 鉴权。
+- 💬 **IM 聊天模块**：WebSocket 实时通信，文本/图片/系统消息、撤回、禁言、封禁、后台管理。
+- ⭐ **积分系统**：积分规则、明细、排行榜、任务中心。
+- 🧱 **架构优化**：全局异常处理增强、模块解耦、WebSocket 鉴权同步、敏感词中台。
+- 📦 **数据库**：新增聊天、积分相关表。
+
+### v1.3.0 🔥
+
+- 🤖 **历史架构阶段：Coze AI 集成**：早期版本曾以 Coze 作为统一 AI 能力入口，当前主干已完成新一代 Runtime 重构。
+- 🎯 **Bug 趣味墙**：Bug 题库、抓取、分享、历史记录与运营活动。
+- 🧘 **摸鱼工作台**：每日任务、时薪统计、排行榜、提醒。
+- 🧰 **效率工具集**：常用开发工具聚合、清晰的路径引导。
+- 🎨 **用户体验**：前台 UI 重构、响应式布局、主题优化。
+- 🧠 **知识图谱强化**：节点内容升级、图谱编辑、后台维护流程。
+- 📦 **模块化**：`xiaou-moyu`、`xiaou-version` 等独立为可复用模块。
+
+### v1.2.x
+
+- 🛠️ **在线工具/简历 2.0**：多格式导出、版本管理、实时协作。
+- 🔔 **通知中心**：系统消息、站内信、订阅提醒。
+- 📁 **文件存储**：本地/云存储适配、权限控制、统计。
+- ⚙️ **系统优化**：SQL 规范化、结构调整、性能提升。
+
+### v1.1.x
+
+- ✨ **功能增强**：招聘/内推模块、问答、用户中心、数据结构升级。
+- 🧱 **架构优化**：模块抽象、代码重构、性能调优。
+
+### v1.0.0
+
+- 🎉 初始发布，包含后台管理与基础题库/内容功能。
+
+## 📞 联系方式
+
+- 维护者：xiaou
+- 邮箱：3153566913@qq.com
+- GitHub：https://github.com/xiaou61/Code-Nest
+
+## 📜 开源协议
+
+本项目采用 [MIT License](LICENSE)。欢迎 Star / Fork，一起共建生态。
+
+## 🖼️ 功能截图(bu'fen)
+
+### 管理员端
+
+![image-20251001192022408](https://11-1305448902.cos.ap-chengdu.myqcloud.com/imgs/202510011920552.png)
+![image-20251001192046724](https://11-1305448902.cos.ap-chengdu.myqcloud.com/imgs/202510011920794.png)
+![image-20251001192101335](https://11-1305448902.cos.ap-chengdu.myqcloud.com/imgs/202510011921406.png)
+![image-20251001192116123](https://11-1305448902.cos.ap-chengdu.myqcloud.com/imgs/202510011921200.png)
+![image-20251001192148551](https://11-1305448902.cos.ap-chengdu.myqcloud.com/imgs/202510011921665.png)
+
+### 用户端
+
+
+
+![image-20260128111943563](https://eduplan-1305448902.cos.ap-guangzhou.myqcloud.com/imgs/202601281119341.png)
+
+
+
+![image-20260128111953084](https://eduplan-1305448902.cos.ap-guangzhou.myqcloud.com/imgs/202601281119446.png)
+
+![image-20260128112011807](https://eduplan-1305448902.cos.ap-guangzhou.myqcloud.com/imgs/202601281120161.png)
+
+![image-20260128112030776](https://eduplan-1305448902.cos.ap-guangzhou.myqcloud.com/imgs/202601281120041.png)
+
+![image-20260128112045443](https://eduplan-1305448902.cos.ap-guangzhou.myqcloud.com/imgs/202601281120004.png)
+
+![image-20260128112055648](https://eduplan-1305448902.cos.ap-guangzhou.myqcloud.com/imgs/202601281120061.png)
+
+![image-20260128112110606](https://eduplan-1305448902.cos.ap-guangzhou.myqcloud.com/imgs/202601281121938.png)
+
+![image-20260128112120106](https://eduplan-1305448902.cos.ap-guangzhou.myqcloud.com/imgs/202601281121448.png)
+
+![image-20260128112137308](https://eduplan-1305448902.cos.ap-guangzhou.myqcloud.com/imgs/202601281121696.png)
+
+![image-20260128112149380](https://eduplan-1305448902.cos.ap-guangzhou.myqcloud.com/imgs/202601281121774.png)
+
+![image-20260128112200018](https://eduplan-1305448902.cos.ap-guangzhou.myqcloud.com/imgs/202601281122224.png)
+
+![image-20260128112235813](https://eduplan-1305448902.cos.ap-guangzhou.myqcloud.com/imgs/202601281122565.png)
+
+![image-20260128112246514](https://eduplan-1305448902.cos.ap-guangzhou.myqcloud.com/imgs/202601281122911.png)

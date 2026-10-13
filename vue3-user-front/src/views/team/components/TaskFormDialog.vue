@@ -1,0 +1,346 @@
+<template>
+  <el-dialog
+    :model-value="modelValue"
+    @update:model-value="emit('update:modelValue', $event)"
+    :title="isEdit ? '编辑任务' : '创建任务'"
+    width="500px"
+    :close-on-click-modal="false"
+  >
+    <div class="task-form-dialog">
+      <CnSection surface="plain" compact class="task-summary">
+        <div class="task-summary__content">
+          <div>
+            <CnStatusTag :type="isEdit ? 'info' : 'brand'" size="sm" subtle>
+              {{ isEdit ? '编辑任务' : '新任务' }}
+            </CnStatusTag>
+            <h3>{{ form.taskName || '配置小组打卡任务' }}</h3>
+          </div>
+          <div class="task-summary__tags">
+            <CnStatusTag type="success" size="sm">{{ getTaskTypeText(form.taskType) }}</CnStatusTag>
+            <CnStatusTag type="neutral" size="sm" subtle>{{ getRepeatText(form.repeatType) }}</CnStatusTag>
+          </div>
+        </div>
+      </CnSection>
+
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
+        <el-form-item label="任务名称" prop="taskName">
+          <el-input v-model="form.taskName" placeholder="请输入任务名称" maxlength="50" show-word-limit />
+        </el-form-item>
+
+        <el-form-item label="任务描述" prop="taskDesc">
+          <el-input
+            v-model="form.taskDesc"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入任务描述（选填）"
+            maxlength="200"
+            show-word-limit
+          />
+        </el-form-item>
+
+        <el-form-item label="任务类型" prop="taskType">
+          <el-radio-group v-model="form.taskType">
+            <el-radio :value="1">刷题</el-radio>
+            <el-radio :value="2">学习时长</el-radio>
+            <el-radio :value="3">阅读</el-radio>
+            <el-radio :value="4">自定义</el-radio>
+          </el-radio-group>
+        </el-form-item>
+
+        <el-form-item label="任务周期" prop="repeatType">
+          <el-radio-group v-model="form.repeatType">
+            <el-radio :value="1">每日任务</el-radio>
+            <el-radio :value="2">工作日任务</el-radio>
+            <el-radio :value="3">自定义重复</el-radio>
+          </el-radio-group>
+        </el-form-item>
+
+        <el-form-item v-if="form.repeatType === 3" label="重复日期">
+          <el-checkbox-group v-model="repeatDaysArray" class="repeat-days">
+            <el-checkbox label="1">周一</el-checkbox>
+            <el-checkbox label="2">周二</el-checkbox>
+            <el-checkbox label="3">周三</el-checkbox>
+            <el-checkbox label="4">周四</el-checkbox>
+            <el-checkbox label="5">周五</el-checkbox>
+            <el-checkbox label="6">周六</el-checkbox>
+            <el-checkbox label="7">周日</el-checkbox>
+          </el-checkbox-group>
+        </el-form-item>
+
+        <el-form-item label="生效时间">
+          <el-date-picker
+            v-model="dateRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始日期（选填）"
+            end-placeholder="结束日期（选填）"
+            value-format="YYYY-MM-DD"
+          />
+        </el-form-item>
+
+        <el-form-item label="任务目标" prop="targetValue">
+          <div class="target-inputs">
+            <el-input-number v-model="form.targetValue" :min="1" :max="9999" />
+            <el-input v-model="form.targetUnit" placeholder="单位，如 次/分钟/页" maxlength="20" />
+          </div>
+        </el-form-item>
+
+        <el-form-item label="完成要求">
+          <div class="requirement-switches">
+            <el-switch v-model="form.requireContent" :active-value="1" :inactive-value="0" active-text="必须填写内容" />
+            <el-switch v-model="form.requireImage" :active-value="1" :inactive-value="0" active-text="必须上传图片" />
+          </div>
+        </el-form-item>
+      </el-form>
+    </div>
+
+    <template #footer>
+      <el-button @click="emit('update:modelValue', false)">取消</el-button>
+      <el-button type="primary" @click="handleSubmit" :loading="submitting">
+        {{ isEdit ? '保存' : '创建' }}
+      </el-button>
+    </template>
+  </el-dialog>
+</template>
+
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
+import { CnSection, CnStatusTag } from '@/design-system'
+import teamApi from '@/api/team'
+
+interface TeamTaskForm {
+  taskName: string
+  taskDesc: string
+  taskType: number
+  targetValue: number
+  targetUnit: string
+  repeatType: number
+  repeatDays: string | null
+  requireContent: number
+  requireImage: number
+  startDate: string | null
+  endDate: string | null
+}
+
+interface TeamTaskData extends Partial<TeamTaskForm> {
+  id?: number | string
+}
+
+const props = defineProps<{
+  modelValue: boolean
+  teamId: string | number
+  taskData?: TeamTaskData | null
+}>()
+
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  success: []
+}>()
+
+const isEdit = computed(() => Boolean(props.taskData))
+
+const createDefaultForm = (): TeamTaskForm => ({
+  taskName: '',
+  taskDesc: '',
+  taskType: 1,
+  targetValue: 1,
+  targetUnit: '次',
+  repeatType: 1,
+  repeatDays: null,
+  requireContent: 0,
+  requireImage: 0,
+  startDate: null,
+  endDate: null
+})
+
+const formRef = ref<FormInstance | null>(null)
+const submitting = ref(false)
+const dateRange = ref<string[]>([])
+const repeatDaysArray = ref<string[]>([])
+const form = ref<TeamTaskForm>(createDefaultForm())
+
+const rules: FormRules<TeamTaskForm> = {
+  taskName: [{ required: true, message: '请输入任务名称', trigger: 'blur' }],
+  targetValue: [{ required: true, message: '请输入任务目标', trigger: 'change' }],
+  taskType: [{ required: true, message: '请选择任务类型', trigger: 'change' }],
+  repeatType: [{ required: true, message: '请选择任务周期', trigger: 'change' }]
+}
+
+watch(
+  () => props.modelValue,
+  (val) => {
+    if (!val) return
+
+    if (props.taskData) {
+      form.value = {
+        taskName: props.taskData.taskName || '',
+        taskDesc: props.taskData.taskDesc || '',
+        taskType: props.taskData.taskType || 1,
+        targetValue: props.taskData.targetValue || 1,
+        targetUnit: props.taskData.targetUnit || '次',
+        repeatType: props.taskData.repeatType || 1,
+        repeatDays: props.taskData.repeatDays || null,
+        requireContent: props.taskData.requireContent ?? 0,
+        requireImage: props.taskData.requireImage ?? 0,
+        startDate: props.taskData.startDate || null,
+        endDate: props.taskData.endDate || null
+      }
+      repeatDaysArray.value = props.taskData.repeatDays ? String(props.taskData.repeatDays).split(',') : []
+      dateRange.value = props.taskData.startDate && props.taskData.endDate ? [props.taskData.startDate, props.taskData.endDate] : []
+    } else {
+      resetForm()
+    }
+  }
+)
+
+watch(dateRange, (val) => {
+  if (val && val.length === 2) {
+    form.value.startDate = val[0]
+    form.value.endDate = val[1]
+  } else {
+    form.value.startDate = null
+    form.value.endDate = null
+  }
+})
+
+watch(repeatDaysArray, (val) => {
+  form.value.repeatDays = val.length > 0 ? val.join(',') : null
+})
+
+watch(
+  () => form.value.repeatType,
+  (val) => {
+    if (val !== 3) {
+      repeatDaysArray.value = []
+    }
+  }
+)
+
+const resetForm = () => {
+  form.value = createDefaultForm()
+  dateRange.value = []
+  repeatDaysArray.value = []
+  formRef.value?.clearValidate()
+}
+
+const handleSubmit = async () => {
+  const valid = await formRef.value?.validate().catch(() => false)
+  if (!valid) return
+  if (form.value.repeatType === 3 && repeatDaysArray.value.length === 0) {
+    ElMessage.warning('请选择自定义重复日期')
+    return
+  }
+
+  submitting.value = true
+  try {
+    const data = {
+      taskName: form.value.taskName,
+      taskDesc: form.value.taskDesc,
+      taskType: form.value.taskType,
+      targetValue: form.value.targetValue || 1,
+      targetUnit: form.value.targetUnit || '次',
+      repeatType: form.value.repeatType || 1,
+      repeatDays: form.value.repeatType === 3 ? form.value.repeatDays : null,
+      requireContent: form.value.requireContent ?? 0,
+      requireImage: form.value.requireImage ?? 0,
+      startDate: form.value.startDate,
+      endDate: form.value.endDate
+    }
+
+    if (isEdit.value && props.taskData?.id) {
+      await teamApi.updateTask(props.taskData.id, data)
+      ElMessage.success('更新成功')
+    } else {
+      await teamApi.createTask(props.teamId, data)
+      ElMessage.success('创建成功')
+    }
+
+    emit('update:modelValue', false)
+    emit('success')
+  } catch (error) {
+    console.error('保存失败:', error)
+  } finally {
+    submitting.value = false
+  }
+}
+
+const getTaskTypeText = (type: unknown) => {
+  const map: Record<string, string> = {
+    1: '刷题',
+    2: '学习时长',
+    3: '阅读',
+    4: '自定义'
+  }
+  return map[String(type)] || '自定义'
+}
+
+const getRepeatText = (type: unknown) => {
+  const map: Record<string, string> = {
+    1: '每日任务',
+    2: '工作日任务',
+    3: '自定义重复'
+  }
+  return map[String(type)] || '每日任务'
+}
+</script>
+
+<style scoped>
+.task-form-dialog {
+  display: grid;
+  gap: var(--cn-space-5);
+}
+
+.task-summary {
+  border-color: color-mix(in srgb, var(--cn-color-brand-primary) 22%, var(--cn-color-border));
+}
+
+.task-summary__content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--cn-space-4);
+}
+
+.task-summary__content h3 {
+  margin: var(--cn-space-2) 0 0;
+  color: var(--cn-color-text-primary);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.task-summary__tags,
+.repeat-days,
+.requirement-switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cn-space-2);
+}
+
+.target-inputs {
+  display: flex;
+  gap: var(--cn-space-3);
+  width: 100%;
+}
+
+.target-inputs :deep(.el-input-number) {
+  width: 140px;
+}
+
+.target-inputs :deep(.el-input) {
+  flex: 1;
+}
+
+@media (max-width: 560px) {
+  .task-summary__content,
+  .target-inputs {
+    display: grid;
+  }
+
+  .target-inputs :deep(.el-input-number) {
+    width: 100%;
+  }
+}
+</style>

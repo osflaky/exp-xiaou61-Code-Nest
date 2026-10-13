@@ -1,0 +1,628 @@
+# 学习与成长
+
+本模块是 Code Nest 的核心业务域之一，覆盖面试题库、掌握度追踪、闪卡、知识图谱、成长自动驾驶、计划打卡、学习小组等子功能。
+
+## 子模块一览
+
+| 子模块 | 包路径 | 核心 Service | 说明 |
+|--------|--------|-------------|------|
+| 面试题库 | `xiaou-interview` | `InterviewMasteryServiceImpl` | 题目 CRUD + 掌握度追踪 |
+| 闪卡 | `xiaou-flashcard` | `FlashcardUserServiceImpl` | 间隔重复 + 复习调度 |
+| 知识图谱 | `xiaou-knowledge` | `KnowledgeGraphServiceImpl` | 节点/边 CRUD + 图谱遍历 |
+| 计划打卡 | `xiaou-plan` | `UserPlanServiceImpl` | 日常打卡 + 连续天数 |
+| 成长自动驾驶 | `xiaou-plan` | `GrowthAutopilotServiceImpl` | 自动生成学习任务 + 成长分 |
+| 学习驾驶舱 | `xiaou-application` | `LearningCockpitServiceImpl` | 跨模块聚合 + safeCall 降级 |
+| 学习小组 | `xiaou-team` | `UserTeamServiceImpl` | 排行/贡献/讨论 |
+
+## 面试题库与掌握度
+
+### 题目结构
+
+面试题目存储在 `interview_question` 表中，核心字段：
+
+| 字段 | 说明 |
+|------|------|
+| `id` | 题目 ID |
+| `title` | 题目标题 |
+| `category` | 分类（如 Java、数据库、框架等） |
+| `difficulty` | 难度等级 |
+| `answer` | 参考答案 |
+| `analysis` | 解析 |
+
+### 掌握度追踪
+
+用户对每道题的掌握度记录存储在 `interview_mastery_record` 表中，核心字段：
+
+| 字段 | 说明 |
+|------|------|
+| `userId` | 用户 ID |
+| `questionId` | 题目 ID |
+| `masteryLevel` | 掌握度等级：0=未学, 1=了解, 2=理解, 3=掌握, 4=精通 |
+| `reviewCount` | 复习次数 |
+| `nextReviewDate` | 下次复习日期 |
+| `lastReviewDate` | 上次复习日期 |
+
+### 复习间隔算法
+
+`InterviewMasteryServiceImpl.calculateNextReviewDays()` 实现间隔重复：
+
+```text
+基础间隔表（按 masteryLevel 索引）:
+  level 1 → 1 天
+  level 2 → 2 天
+  level 3 → 4 天
+  level 4 → 7 天
+
+实际间隔 = 基础间隔 × 2^min(reviewCount, 5)
+最大间隔 = 60 天
+```
+
+示例推算：
+
+| 掌握度 | 复习次数 | 计算间隔 |
+|--------|---------|---------|
+| 1（了解） | 0 次 | 1 × 1 = 1 天 |
+| 2（理解） | 1 次 | 2 × 2 = 4 天 |
+| 3（掌握） | 3 次 | 4 × 8 = 32 天 |
+| 4（精通） | 5 次 | 7 × 32 = 224 → 截断为 60 天 |
+
+### 接口清单
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/user/interview/questions` | 分页查询题目列表 |
+| GET | `/user/interview/question/{id}` | 获取题目详情 |
+| POST | `/user/interview/mastery` | 更新掌握度 |
+| GET | `/user/interview/mastery/stats` | 获取掌握度统计 |
+| GET | `/user/interview/review/today` | 获取今日待复习题目 |
+| GET | `/user/interview/review/overdue` | 获取逾期未复习题目 |
+| GET | `/user/interview/categories` | 获取题目分类列表 |
+
+## 闪卡
+
+### 核心逻辑
+
+`FlashcardUserServiceImpl` 实现基于间隔重复的闪卡复习：
+
+| 方法 | 说明 |
+|------|------|
+| `createDeck()` | 创建卡组 |
+| `addCard()` | 添加闪卡到卡组 |
+| `reviewCard()` | 复习单张卡（记录结果，更新下次复习时间） |
+| `getDueCards()` | 获取到期待复习卡片 |
+| `getDeckStats()` | 获取卡组统计（总数/已掌握/待复习） |
+
+### 复习调度
+
+闪卡复习与面试题掌握度使用类似的间隔重复策略，但独立维护：
+
+- 每张卡有独立的 `easeFactor`（易度因子），初始值 2.5
+- 回答正确：`interval = interval × easeFactor`
+- 回答错误：`interval = 1`，`easeFactor -= 0.2`（最低 1.3）
+
+### 接口清单
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/user/flashcard/decks` | 创建卡组 |
+| GET | `/user/flashcard/decks` | 获取卡组列表 |
+| GET | `/user/flashcard/decks/{id}` | 获取卡组详情 |
+| POST | `/user/flashcard/decks/{id}/cards` | 添加闪卡 |
+| GET | `/user/flashcard/decks/{id}/cards/due` | 获取待复习卡片 |
+| POST | `/user/flashcard/cards/{id}/review` | 提交复习结果 |
+| DELETE | `/user/flashcard/decks/{id}` | 删除卡组 |
+
+## 知识图谱
+
+### 数据模型
+
+`KnowledgeGraphServiceImpl` 管理知识节点和关系边：
+
+| 实体 | 表 | 核心字段 |
+|------|-----|---------|
+| 知识节点 | `knowledge_node` | id, name, description, category |
+| 知识边 | `knowledge_edge` | id, sourceId, targetId, relationType |
+
+relationType 枚举值：
+
+| 值 | 含义 |
+|----|------|
+| `PREREQUISITE` | 前置依赖 |
+| `RELATED` | 关联知识 |
+| `EXTENDS` | 扩展深入 |
+
+### 图谱操作
+
+| 方法 | 说明 |
+|------|------|
+| `createNode()` | 创建知识节点 |
+| `createEdge()` | 创建关系边 |
+| `getSubgraph()` | 获取子图（从指定节点出发，指定深度） |
+| `getPath()` | 获取两节点间路径 |
+| `getPrerequisites()` | 获取前置知识链 |
+
+## 计划打卡
+
+### 打卡机制
+
+| 方法 | 说明 |
+|------|------|
+| `createPlan()` | 创建学习计划（设定目标和周期） |
+| `checkIn()` | 每日打卡 |
+| `getCheckInStatus()` | 获取打卡状态（连续天数、本周完成情况） |
+| `getStreakDays()` | 计算连续打卡天数 |
+
+连续天数计算逻辑：从今天往前逐日检查，遇到未打卡日即停止。
+
+### 接口清单
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/user/plan/plans` | 创建学习计划 |
+| GET | `/user/plan/plans` | 获取计划列表 |
+| GET | `/user/plan/plans/{id}` | 获取计划详情 |
+| POST | `/user/plan/plans/{id}/checkin` | 打卡 |
+| GET | `/user/plan/plans/{id}/status` | 获取打卡状态 |
+| PUT | `/user/plan/plans/{id}` | 更新计划 |
+| DELETE | `/user/plan/plans/{id}` | 删除计划 |
+
+## 成长自动驾驶
+
+成长自动驾驶（Autopilot）是本模块最复杂的子系统，负责根据用户当前状态自动生成学习任务并计算成长分。
+
+### 架构
+
+```text
+UserGrowthAutopilotController
+  └─ GrowthAutopilotServiceImpl
+       ├─ buildAutopilotDashboard()   → 聚合各模块状态
+       ├─ buildGrowthScore()          → 计算综合成长分
+       ├─ buildDailyTasks()           → 生成每日任务
+       ├─ buildWeeklyTasks()          → 生成每周任务
+       └─ buildWeaknesses()           → 识别薄弱项
+```
+
+### 成长分计算公式
+
+`GrowthAutopilotServiceImpl.buildGrowthScore()` 实现：
+
+```text
+总分 = completionScore + activeScore + balanceScore + rankingScore + trendScore - riskPenalty
+```
+
+各分项计算规则：
+
+| 分项 | 最大值 | 计算方式 |
+|------|--------|---------|
+| completionScore | ~58 | completionRate × 0.58（完成率权重最高） |
+| activeScore | 20 | min(activeDays, 7) × 20 / 7 |
+| balanceScore | 12 | 按最低完成率分档：≥ 90% → 12, ≥ 70% → 10, ≥ 50% → 7, ≥ 30% → 4, else → 1 |
+| rankingScore | 10 | 上升 → 10, 持平 → 8, 在榜 → 6, else → 2 |
+| trendScore | 10 | min(活跃天数, 7) × 10 / 7 |
+| riskPenalty | 无上限 | 每个 severity != LOW 的 weakness 扣 min(impactScore / 12, 5) |
+
+### 趋势分（Trend Score）计算
+
+每日活跃分计算：
+
+```text
+dailyScore = interviewCount × 8 + flashcardCount × 2 + (积分打卡 ? 16 : 0)
+```
+
+近 7 天的 dailyScore 求和即为趋势分基础值。
+
+### 模块权重配置
+
+成长自动驾驶对不同学习模块设置权重，用于计算完成率和生成任务：
+
+| 模块 | 通用权重 | 后端岗权重 | 前端岗权重 | 测试岗权重 |
+|------|---------|-----------|-----------|-----------|
+| OJ 刷题 | 0.26 | 0.33 | 0.20 | 0.18 |
+| 面试题 | 0.22 | 0.24 | 0.27 | 0.28 |
+| 闪卡 | 0.16 | 0.14 | 0.17 | 0.16 |
+| 计划 | 0.14 | 0.12 | 0.13 | 0.14 |
+| 模拟面试 | 0.14 | 0.12 | 0.15 | 0.16 |
+| 积分 | 0.08 | 0.05 | 0.08 | 0.08 |
+
+**目标岗位调整**：当用户设定目标岗位（后端/前端/测试）时，权重会按上表偏移，强化与岗位关联度更高的模块。
+
+### 薄弱项识别
+
+`buildWeaknesses()` 方法根据各模块完成率和排名，自动识别薄弱项：
+
+| severity | 触发条件 |
+|----------|---------|
+| HIGH | 完成率 &lt; 30% 且持续 7 天无改善 |
+| MEDIUM | 完成率 &lt; 50% 或排名持续下降 |
+| LOW | 完成率 &lt; 70% 但有改善趋势 |
+
+每个薄弱项包含 `impactScore`（影响分），用于成长分扣减计算。
+
+### 聚合数据流
+
+`buildAutopilotDashboard()` 跨模块聚合数据，数据来源：
+
+| 数据 | 来源 Service | 方法 |
+|------|-------------|------|
+| OJ 完成数 | OJ 统计 | 获取用户提交统计 |
+| 面试掌握度统计 | InterviewMasteryService | 获取掌握度统计 |
+| 闪卡掌握数 | FlashcardUserService | 获取卡组统计 |
+| 计划完成率 | UserPlanService | 获取打卡状态 |
+| 积分余额 | PointsService | 获取积分余额 |
+| 排名信息 | TeamRankService | 获取个人排名 |
+
+### 接口清单
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/user/plan/autopilot/dashboard` | 获取自动驾驶仪表盘 |
+| GET | `/user/plan/autopilot/tasks/daily` | 获取每日任务 |
+| GET | `/user/plan/autopilot/tasks/weekly` | 获取每周任务 |
+| GET | `/user/plan/autopilot/weaknesses` | 获取薄弱项 |
+| POST | `/user/plan/autopilot/target-role` | 设置目标岗位 |
+| GET | `/user/plan/autopilot/growth-score` | 获取成长分详情 |
+
+## 学习驾驶舱
+
+学习驾驶舱（Learning Cockpit）是跨模块聚合层，位于 `xiaou-application` 中，通过 safeCall 降级保证任一模块不可用时仪表盘仍可展示。
+
+### 架构
+
+```text
+LearningCockpitController
+  └─ LearningCockpitServiceImpl
+       ├─ getOverview()           → 聚合总览数据
+       ├─ safeCall() × 10         → 10 个跨模块调用点
+       └─ buildDangerModules()    → 收集失败模块列表
+```
+
+### safeCall 降级明细
+
+`LearningCockpitServiceImpl` 中的每个 safeCall 调用都有独立的降级默认值：
+
+| 聚合项 | 调用目标 | 降级默认值 | 意义 |
+|--------|---------|-----------|------|
+| OJ 统计 | OJ 模块 | `{solvedCount: 0, submitCount: 0}` | 已解决/提交数归零 |
+| 面试掌握度 | Interview 模块 | `{masteredCount: 0, totalCount: 0}` | 已掌握/总数归零 |
+| 闪卡统计 | Flashcard 模块 | `{dueCount: 0, masteredCount: 0}` | 待复习/已掌握归零 |
+| 积分余额 | Points 模块 | `{balance: 0}` | 积分归零 |
+| 排名 | Team 模块 | `{ranking: 0, totalMembers: 0}` | 排名/总人数归零 |
+| 计划状态 | Plan 模块 | `{streakDays: 0, weeklyCompletion: 0.0}` | 连续天数/周完成率归零 |
+| 成长分 | Autopilot 模块 | `{totalScore: 0, level: "UNKNOWN"}` | 分数归零/等级未知 |
+| 知识图谱 | Knowledge 模块 | `{nodeCount: 0, edgeCount: 0}` | 节点/边数归零 |
+| 近期动态 | Activity 模块 | `emptyList` | 动态为空列表 |
+| 学习建议 | AI 建议 | `emptyList` | 建议为空列表 |
+
+当某个 safeCall 失败时，该模块出现在 `dangerModules` 列表中，前端可据此显示"数据暂时不可用"而非空白或报错。
+
+### 总览响应结构
+
+`LearningCockpitOverviewResponse` 核心字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `ojStats` | OjStats | OJ 刷题统计 |
+| `interviewStats` | InterviewStats | 面试掌握度统计 |
+| `flashcardStats` | FlashcardStats | 闪卡统计 |
+| `pointsBalance` | Integer | 积分余额 |
+| `ranking` | RankingInfo | 排名信息 |
+| `planStatus` | PlanStatus | 计划打卡状态 |
+| `growthScore` | GrowthScoreInfo | 成长分信息 |
+| `knowledgeStats` | KnowledgeStats | 知识图谱统计 |
+| `recentActivities` | List&lit;ActivityItem&gt; | 近期动态 |
+| `suggestions` | List&lit;SuggestionItem&gt; | 学习建议 |
+| `dangerModules` | List&lit;String&gt; | 降级模块列表 |
+
+### 接口清单
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/user/learning/cockpit/overview` | 获取驾驶舱总览 |
+| GET | `/user/learning/cockpit/oj-stats` | 获取 OJ 统计 |
+| GET | `/user/learning/cockpit/interview-stats` | 获取面试统计 |
+| GET | `/user/learning/cockpit/flashcard-stats` | 获取闪卡统计 |
+| GET | `/user/learning/cockpit/growth-trend` | 获取成长趋势 |
+
+## 学习小组
+
+学习小组功能在 [计划与团队](/modules/plan-team) 中详细说明。与学习成长相关的核心交互：
+
+| 交互 | 说明 |
+|------|------|
+| 打卡贡献 | 成员每日打卡增加团队贡献值 |
+| 排行榜 | 团队内/团队间学习排行 |
+| 讨论区 | 小组内讨论面试题、学习资源 |
+| 共享卡组 | 团队内共享闪卡组 |
+
+## 跨模块数据流
+
+### 学习行为 → 积分
+
+| 学习行为 | 积分规则 | 触发方式 |
+|---------|---------|---------|
+| 每日打卡 | 固定积分 | `UserPlanService.checkIn()` → 积分事件 |
+| 面试题掌握度提升 | 按掌握度等级 | `InterviewMasteryService.updateMastery()` → 积分事件 |
+| 闪卡复习完成 | 按每日复习量 | `FlashcardUserService.reviewCard()` → 积分事件 |
+| OJ 首次 AC | 首次 AC 积分 | `OJJudgeService` → 积分回流 |
+
+### 数据聚合路径
+
+```text
+学习驾驶舱总览
+  ├─ LearningCockpitServiceImpl.getOverview()
+  │   ├─ safeCall(OJ模块)          → OjStats
+  │   ├─ safeCall(Interview模块)   → InterviewStats
+  │   ├─ safeCall(Flashcard模块)   → FlashcardStats
+  │   ├─ safeCall(Points模块)      → PointsBalance
+  │   ├─ safeCall(Team模块)        → RankingInfo
+  │   ├─ safeCall(Plan模块)        → PlanStatus
+  │   ├─ safeCall(Autopilot模块)   → GrowthScoreInfo
+  │   ├─ safeCall(Knowledge模块)   → KnowledgeStats
+  │   ├─ safeCall(Activity模块)    → RecentActivities
+  │   └─ safeCall(AI模块)          → Suggestions
+  └─ 聚合 → LearningCockpitOverviewResponse + dangerModules
+```
+
+### 成长分 → 驾驶舱 → 前端
+
+```text
+GrowthAutopilotServiceImpl.buildGrowthScore()
+  → GrowthScoreInfo (totalScore, level, breakdown)
+  → LearningCockpitServiceImpl.safeCall()
+  → LearningCockpitOverviewResponse.growthScore
+  → 前端驾驶舱页面
+```
+
+## 新增功能自检
+
+新增学习成长相关功能时，至少验证：
+
+| 检查项 | 预期 |
+|--------|------|
+| 掌握度更新 | 正确计算下次复习日期，间隔符合算法 |
+| 闪卡复习 | easeFactor 不低于 1.3，间隔合理增长 |
+| 打卡连续天数 | 中断后归零，补签仅计当天 |
+| 成长分 | 各分项计算正确，riskPenalty 不使总分为负 |
+| safeCall | 单模块失败不影响其他模块数据展示 |
+| 积分回流 | 学习行为产生的积分事件正确触发 |
+| 目标岗位 | 切换岗位后权重偏移生效 |
+| 薄弱项 | 识别逻辑与 severity 分档一致 |
+
+## 推荐阅读
+
+| 继续看什么 | 为什么 |
+|-----------|--------|
+| [计划与团队](/modules/plan-team) | 学习小组排行与贡献机制 |
+| [积分与抽奖](/modules/points) | 积分发放规则与回流 |
+| [OJ 判题](/modules/oj) | OJ 刷题统计与首次 AC 积分 |
+| [AI Runtime](/modules/ai-runtime) | AI 学习建议与结构化输出 |
+| [API 路由索引](/reference/api-routes) | 完整接口清单 |
+| [权限与安全边界](/guide/security-boundaries) | 学习数据属于当前用户，需从 Token 取 ID |
+
+---
+
+## 学习与成长模块深度拆解
+
+> 以下内容基于 `xiaou-interview`、`xiaou-plan`、`xiaou-flashcard`、`xiaou-knowledge` 全部源码拆解，覆盖掌握度算法、学习热力图、成长自动驾驶等核心机制。
+
+### 一、掌握度算法深度分析
+
+**源码**：`InterviewMasteryServiceImpl.java`（332 行）
+
+面试题掌握度基于艾宾浩斯遗忘曲线设计，通过动态调整复习间隔实现长期记忆。
+
+#### 1.1 复习间隔计算
+
+```
+calculateNextReviewDays(masteryLevel, reviewCount):
+┌─────────────────────────────────────────────────────────┐
+│ 1. 基础间隔（根据掌握度等级）                             │
+│    BASE_INTERVALS = [1, 2, 4, 7]                        │
+│    level 1 (不会): baseInterval = 1 天                   │
+│    level 2 (模糊): baseInterval = 2 天                   │
+│    level 3 (熟悉): baseInterval = 4 天                   │
+│    level 4 (已掌握): baseInterval = 7 天                 │
+├─────────────────────────────────────────────────────────┤
+│ 2. 复习次数倍增（指数增长）                               │
+│    multiplier = 2^min(reviewCount, 5)                    │
+│    reviewCount=0: multiplier=1                           │
+│    reviewCount=1: multiplier=2                           │
+│    reviewCount=2: multiplier=4                           │
+│    reviewCount=3: multiplier=8                           │
+│    reviewCount=4: multiplier=16                          │
+│    reviewCount=5+: multiplier=32（上限）                  │
+├─────────────────────────────────────────────────────────┤
+│ 3. 计算最终间隔                                           │
+│    days = baseInterval * multiplier                      │
+│    return min(days, MAX_INTERVAL=60)                     │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### 1.2 复习间隔示例
+
+| 掌握度 | 复习次数 | 基础间隔 | 倍增 | 最终间隔 |
+|--------|---------|---------|------|---------|
+| 不会 (1) | 0 | 1 | 1 | 1 天 |
+| 不会 (1) | 1 | 1 | 2 | 2 天 |
+| 不会 (1) | 2 | 1 | 4 | 4 天 |
+| 不会 (1) | 3 | 1 | 8 | 8 天 |
+| 模糊 (2) | 0 | 2 | 1 | 2 天 |
+| 模糊 (2) | 1 | 2 | 2 | 4 天 |
+| 熟悉 (3) | 0 | 4 | 1 | 4 天 |
+| 熟悉 (3) | 1 | 4 | 2 | 8 天 |
+| 已掌握 (4) | 0 | 7 | 1 | 7 天 |
+| 已掌握 (4) | 2 | 7 | 4 | 28 天 |
+
+**关键发现 1**：复习次数上限为 5 次，倍增因子最大 32。这意味着即使复习次数再多，间隔也不会超过 60 天。
+
+**关键发现 2**：掌握度等级越高，基础间隔越长。"已掌握"的题目间隔是"不会"的 7 倍。
+
+### 二、学习热力图深度分析
+
+**源码**：`InterviewMasteryServiceImpl.java:188-225`
+
+学习热力图展示用户的学习活跃度，类似 GitHub 贡献图。
+
+#### 2.1 热力等级计算
+
+```
+calculateLevel(count):
+  count == 0 → level 0 (无数据)
+  count 1-5  → level 1 (低活跃)
+  count 6-15 → level 2 (中活跃)
+  count 16-30 → level 3 (高活跃)
+  count 31+  → level 4 (极高活跃)
+```
+
+#### 2.2 连续学习天数计算
+
+```
+calculateCurrentStreak(userId, today):
+┌─────────────────────────────────────────────────────────┐
+│ 1. 从今天开始向前检查                                     │
+│    checkDate = today                                     │
+│    streak = 0                                            │
+├─────────────────────────────────────────────────────────┤
+│ 2. 循环检查每一天                                        │
+│    while (true):                                         │
+│      stats = dailyStatsMapper.selectByUserAndDate(...)   │
+│      if (stats != null && stats.totalCount > 0):         │
+│        streak++                                          │
+│        checkDate = checkDate.minusDays(1)                │
+│      else:                                               │
+│        break                                             │
+├─────────────────────────────────────────────────────────┤
+│ 3. 返回连续天数                                          │
+│    return streak                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+**关键发现**：连续学习天数计算是逐天查询数据库，如果用户学习历史很长，可能会有性能问题。可以考虑使用 Redis 缓存。
+
+### 三、成长自动驾驶深度分析
+
+**源码**：`GrowthAutopilotServiceImpl.java`（739 行）
+
+成长自动驾驶是"周计划 + 每日任务"的自动化学习管理系统。
+
+#### 3.1 周计划生成流程
+
+```
+generateWeeklyPlan(userId, request):
+┌─────────────────────────────────────────────────────────┐
+│ 1. 参数标准化                                            │
+│    weekStart = normalizeWeekStart(request.weekStart)     │
+│    targetRole = normalizeRole(request.targetRole)        │
+│    weeklyHours = normalizeWeeklyHours(request.weeklyHours)│
+├─────────────────────────────────────────────────────────┤
+│ 2. 创建或更新周目标                                      │
+│    goal = goalMapper.selectByUserAndWeek(userId, weekStart)│
+│    if (goal == null):                                    │
+│      goal = new GrowthAutopilotGoal(...)                 │
+│      goalMapper.insert(goal)                             │
+│    else:                                                 │
+│      taskMapper.deleteByGoalId(goal.getId())             │
+│      goalMapper.updateById(goal)                         │
+├─────────────────────────────────────────────────────────┤
+│ 3. 生成每周任务                                          │
+│    tasks = buildWeeklyTasks(goal, LocalDate.now())       │
+│    taskMapper.batchInsert(tasks)                         │
+├─────────────────────────────────────────────────────────┤
+│ 4. 刷新目标指标                                          │
+│    refreshGoalMetrics(goal.getId())                      │
+├─────────────────────────────────────────────────────────┤
+│ 5. 记录事件                                              │
+│    writeEvent(goal.getId(), userId, "generate", "...")   │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### 3.2 风险等级计算
+
+```
+calcRiskLevel(completionRate, overdueTasks, daysLeft):
+┌─────────────────────────────────────────────────────────┐
+│ 1. 完成率风险                                            │
+│    if (completionRate < 30 && daysLeft <= 2): return "high"│
+│    if (completionRate < 50 && daysLeft <= 3): return "medium"│
+├─────────────────────────────────────────────────────────┤
+│ 2. 逾期任务风险                                          │
+│    if (overdueTasks >= 5): return "high"                 │
+│    if (overdueTasks >= 3): return "medium"               │
+├─────────────────────────────────────────────────────────┤
+│ 3. 默认风险                                              │
+│    return "low"                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### 3.3 任务状态机
+
+```
+任务状态流转：
+  todo → done (用户完成)
+  todo → missed (日期过期未完成)
+  todo → todo (顺延到明天)
+
+状态说明：
+  - todo: 待完成
+  - done: 已完成
+  - missed: 已逾期（自动标记）
+```
+
+**关键发现 1**：任务顺延只支持"待完成"状态，已完成或已逾期的任务不能顺延。
+
+**关键发现 2**：重排（replan）会将今天之前的待完成任务标记为"已逾期"，然后根据剩余分数重新生成任务。
+
+**关键发现 3**：风险等级基于完成率、逾期任务数和剩余天数三个维度计算，用于提醒用户学习进度。
+
+### 四、深度发现与坑点
+
+#### 4.1 已确认的代码问题
+
+| 编号 | 问题 | 位置 | 影响 |
+| --- | --- | --- | --- |
+| BUG-1 | 连续学习天数逐天查询数据库 | `InterviewMasteryServiceImpl:286-301` | 学习历史长时性能差 |
+| BUG-2 | 最长连续天数计算依赖年度数据 | `InterviewMasteryServiceImpl:306-331` | 跨年时可能不准确 |
+| BUG-3 | 任务顺延不支持跨周 | `GrowthAutopilotServiceImpl:173-174` | 周末任务无法顺延到下周 |
+
+#### 4.2 设计层面的潜在风险
+
+| 编号 | 风险 | 说明 |
+| --- | --- | --- |
+| RISK-1 | 掌握度倍增因子增长过快 | 复习 5 次后间隔 60 天，可能遗忘 |
+| RISK-2 | 热力图数据量大时查询慢 | 逐天查询，一年 365 次查询 |
+| RISK-3 | 成长自动驾驶任务生成无 AI | 当前是规则生成，不是 AI 推荐 |
+
+#### 4.3 架构设计亮点
+
+| 编号 | 亮点 | 说明 |
+| --- | --- | --- |
+| H-1 | 艾宾浩斯遗忘曲线 | 基于科学记忆理论设计复习间隔 |
+| H-2 | 掌握度分级 | 4 级掌握度对应不同基础间隔 |
+| H-3 | 周计划自动化 | 根据目标岗位和时间自动生成任务 |
+| H-4 | 风险等级预警 | 基于完成率、逾期任务、剩余天数计算风险 |
+| H-5 | 事件日志追踪 | 记录所有操作，支持复盘 |
+
+#### 4.4 源码导航速查
+
+| 想了解 | 读什么 |
+| --- | --- |
+| 掌握度算法 | `InterviewMasteryServiceImpl.java` — `calculateNextReviewDays` |
+| 复习列表 | `InterviewMasteryServiceImpl.java` — `getReviewList` overdue/today/week/all |
+| 学习热力图 | `InterviewMasteryServiceImpl.java` — `getHeatmap` + `calculateCurrentStreak` |
+| 每日统计 | `InterviewDailyStatsMapper.xml` — `incrementLearnCount` / `incrementReviewCount` |
+| 成长自动驾驶 | `GrowthAutopilotServiceImpl.java` — `generateWeeklyPlan` + `completeTask` |
+| 风险计算 | `GrowthAutopilotServiceImpl.java` — `calcRiskLevel` |
+| 任务顺延 | `GrowthAutopilotServiceImpl.java` — `postponeTask` |
+| 任务重排 | `GrowthAutopilotServiceImpl.java` — `replan` |
+
+## 相关模块
+
+| 模块 | 关系 | 说明 |
+| --- | --- | --- |
+| [公共底座](/modules/common) | 强依赖 | 学习成长模块依赖公共底座的统一响应、并发工具和异常处理 |
+| [鉴权与用户体系](/modules/auth) | 强依赖 | 学习数据属于当前用户，需要从 Token 取 ID |
+| [积分与抽奖](/modules/points) | 强依赖 | OJ 首次 AC、学习行为可能触发积分发放 |
+| [AI Runtime](/modules/ai-runtime) | 强依赖 | AI 学习建议、模拟面试、求职作战台依赖 AI Runtime |
+| [计划与学习小组](/modules/plan-team) | 强依赖 | 学习小组排行与贡献机制 |
+| [OJ 判题系统](/modules/oj) | 间接关联 | OJ 刷题统计与首次 AC 积分 |
+| [用户账户与个人中心](/modules/user-account) | 被依赖 | 用户学习数据展示依赖用户信息 |

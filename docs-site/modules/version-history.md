@@ -1,0 +1,603 @@
+# 版本历史
+
+本页同时回答两个问题：仓库版本线如何演进，以及产品内版本墙如何维护。仓库版本以 Git、发布配置和 [文档同步基线](/reference/docs-sync-baseline) 为证据；用户可见公告由后台 `/system/version` 和用户端 `/version-history` 管理。
+
+## 推荐阅读顺序
+
+1. 先看“版本线怎么看”，分清开发分支、发布版本和 tag。
+2. 再看 `v2.0.0` 到 `v2.4.x` 的关键节点，理解 AI Runtime、工程治理、生产交付和平台化优化的演进。
+3. 需要写发布说明时，继续看 [变更日志](/guide/changelog) 和 [版本公告与发版交接模板](/guide/version-release-handoff-template)。
+4. 需要维护产品内版本墙时，直接跳到“产品内版本墙视角”。
+
+## 版本主线概览
+
+| 阶段 | 关键词 | 主要变化 |
+| --- | --- | --- |
+| `v1.8.1` ~ `v1.8.2` | 学习闭环与求职闭环 | 学习资产、Career Loop、内容到学习资产沉淀 |
+| `v2.0.0` | AI Runtime 重构 | 移除 Coze，统一到 `LangChain4j + LangGraph4j + LlamaIndex` |
+| `v2.0.1` ~ `v2.1.2` | 功能补齐与稳定化 | AI 治理、成长驾驶舱、文件权限、WebSocket 票据与限流 |
+| `v2.2.0` ~ `v2.2.2` | 工程质量与文档治理 | Mapper 硬化、前端规范、独立 VitePress 文档站与协作治理 |
+| `v2.3.0` ~ `v2.3.2` | 生产交付与体验修复 | 双端 UI、统一 CI/CD、自动部署、版本分页和首页首屏修复 |
+| `v2.4.0` | Agent 平台化 | 管理员 Agent Runtime、工具注册、权限确认、审计与质量门禁 |
+| `v2.4.1` | 架构与热点链路优化 | 共享设计系统、缓存与线程池治理、批量查询、回归测试与文档中心重构 |
+| `v2.4.2` | 用户端流程与体验修复 | 移动端导航、认证首屏、任务导向导航、行动优先和首页故障降噪 |
+| `v2.4.3` | 首周任务与首页聚合 | 首次登录目标引导、首周自动驾驶计划、首页分区降级聚合和按需 UI 组件 |
+| `v2.5.0` | AI Growth Coach | 计划调整预览/幂等应用、Career Loop 证据闭环和 SRE 只读事件能力 |
+| `v2.5.2` | 业务成长漏斗 | 求职结果回流、成长漏斗和管理端分析契约 |
+| `v2.5.3` | 生产治理与韧性 | checksum 迁移 ledger、可追溯 release bundle、SSRF 防护、Growth Coach 观测和 AI 并发保护 |
+| `v2.5.4` | master 整合与 SRE 治理 | 评测队列、容量治理、外部探针、低基数指标和统一运维发布链路 |
+| `v2.5.5` | 成长能力图谱 | 证据驱动的能力节点、可信度、趋势、关系和只读补强项 |
+| `v2.5.6` | 架构治理 | 启动与编排分离、基础模块拆分、领域所有权、统一契约、路由切片和发布清单 |
+
+## 版本线怎么看
+
+同一个“当前版本”在不同语境下含义不同，判断时要同时看以下证据：
+
+| 来源 | 用途 | 当前示例 |
+| --- | --- | --- |
+| Git 分支 | 正式发布基线位于哪条主线 | `master` |
+| 发布清单 | 当前版本、schema、Docker 与制品布局的事实源 | `release/manifest.json`：`v2.5.6` |
+| Maven `revision` 与前端 `package.json` | 由发布清单同步出的构建投影 | `v2.5.6` |
+| Git tag | 已形成的正式发布锚点 | 最新正式 tag 为 `v2.5.6` |
+| Git commit / PR merge | 某个版本实际落地了什么 | 以 `v2.5.6` tag 指向的 master 提交为准 |
+| README 与变更日志 | 面向维护者和读者的版本摘要 | [变更日志](/guide/changelog) |
+| 产品内版本墙 | 面向最终用户的公告 | `/version-history` |
+
+因此不要仅凭分支名宣布发布。当前统一口径是：**清单、构建投影、master 和正式 tag 均为 `v2.5.6`。**
+
+## Git 演进视角
+
+下面按真实提交和发布锚点整理；每次构建文档站时，[文档同步基线](/reference/docs-sync-baseline) 会记录当时的分支与提交。
+
+### `v2.5.3` 生产治理与韧性
+
+`v2.5.3` 把 v2.5.x 的成长闭环能力推进到可持续生产运行：版本与迁移可追溯，远程来源和 AI 调用有边界，发布失败可恢复。
+
+| 日期 | 提交或批次 | 含义 |
+| --- | --- | --- |
+| 2026-08-04 | `v2.5.3` 发布准备 | 统一版本、迁移 checksum ledger、发布包 smoke test、SSRF 防护、Growth Coach 观测和 AI 并发保护 |
+
+本次发布完成验证后创建 `v2.5.3` tag；详细变化以 [变更日志](/guide/changelog) 为准。
+
+### `v2.5.4` master 整合与生产 SRE 治理
+
+`v2.5.4` 将远程 master 已验证的生产 SRE 评测、容量治理和外部探针能力与 v2.5.3 的成长闭环、迁移 ledger 和发布安全边界合并，保持数据库写入的显式开关和可回滚发布流程。
+
+| 日期 | 提交或批次 | 含义 |
+| --- | --- | --- |
+| 2026-08-04 | `v2.5.4` 发布准备 | master 整合、低基数 SRE 指标、完整发布包和迁移执行链路统一 |
+
+### `v2.5.5` 成长证据与能力图谱
+
+`v2.5.5` 在既有 Growth Coach 证据链上增加用户侧能力图谱，把可验证动作映射为问题解决、面试表达、项目交付、持续执行和求职准备五类能力节点。
+
+| 日期 | 提交或批次 | 含义 |
+| --- | --- | --- |
+| 2026-08-04 | `v2.5.5` 发布准备 | 新增只读能力图谱 API、用户端页面、能力关系和证据回溯；无数据库迁移 |
+
+### `v2.5.6` 架构治理
+
+`v2.5.6` 不扩展业务功能，集中收敛启动壳、公共基础、跨领域访问、SRE/通知所有权、缓存与韧性、前后端契约、路由注册和发布元数据。
+
+| 日期 | 提交或批次 | 含义 |
+| --- | --- | --- |
+| 2026-08-05 | `v2.5.6` 正式发布 | 36 模块依赖治理、双前端契约/路由切片、架构门禁和发布清单单一事实源；无数据库迁移 |
+
+### `v2.5.0` ~ `v2.5.2` Growth Coach 与业务回流
+
+这一阶段把 Growth Autopilot、Career Loop、AI 成长教练和业务成长漏斗串成可验证的行动闭环，具体迁移位于 `sql/v2.5.0/` 和 `sql/v2.5.2/`。
+
+### `v2.4.3` 首周任务与首页聚合
+
+`v2.4.3` 把登录后的目标设置直接转成首周自动驾驶任务，并将首页的多来源请求收敛为服务端聚合响应。单个模块故障只会降级对应区块，求职闭环也改为以自动同步状态表达常态流程。
+
+| 日期 | 提交或批次 | 含义 |
+| --- | --- | --- |
+| 2026-07-16 | `v2.4.3` 发布准备 | 新增首周计划阶段迁移、首页概览接口、行动优先首页和 Element Plus 按需引入 |
+
+本次验证完成后创建 `v2.4.3` tag；详细变化以 [变更日志](/guide/changelog) 为准。
+
+### `v2.4.2` 用户端流程与体验修复
+
+`v2.4.2` 在不改变后端状态机、数据库结构和对外 API 的前提下，修复移动端高频流程，并把主导航和页面首屏改为围绕下一步任务组织。
+
+| 日期 | 提交或批次 | 含义 |
+| --- | --- | --- |
+| 2026-07-16 | `v2.4.2` 发布准备 | 修复移动导航和认证首屏，重组导航，前置求职/面试页面的可执行动作，并收敛首页故障提示 |
+
+本次验证完成后创建 `v2.4.2` tag；详细变化以 [变更日志](/guide/changelog) 为准。
+
+### `v2.4.1` 架构与文档治理发布
+
+`v2.4.1` 从 `v2.4.0` 发布点继续推进，重点不是堆叠新页面，而是减少重复基础设施、修正热点链路和提升可验证性。
+
+| 日期 | 提交或批次 | 含义 |
+| --- | --- | --- |
+| 2026-07-14 | `bce58a7` `refactor: complete v2.4.1 optimizations` | 抽取共享设计系统，治理缓存与线程池，优化学习、社区、朋友圈等热点链路并补测试 |
+| 2026-07-15 | `9169c6d` `docs: reorganize and harden documentation site` | 重组分类与导航，新增工程手册主题、自动同步基线和导航审计 |
+| 2026-07-15 | tag `v2.4.1` | 架构、热点链路和文档治理补丁正式发布 |
+
+这一工作线的发布状态和详细变化以 [变更日志](/guide/changelog) 为准。
+
+### `v2.4.0` Agent 平台化发布
+
+| 日期 | 提交或 tag | 含义 |
+| --- | --- | --- |
+| 2026-07-14 | `8166255` `feat(agent): add unified backend runtime and quality gates` | 建立后端 Agent Runtime 与质量门禁 |
+| 2026-07-14 | `5bb48f8` `chore(release): prepare v2.4.0` | 同步发布版本与发布资料 |
+| 2026-07-14 | tag `v2.4.0` | 当前最近的正式发布锚点 |
+
+这一版将 Agent 规划、权限、确认、执行、审计与幂等能力收口到后端，管理端只负责交互和结果展示。
+
+### `v2.3.x` 生产交付与体验修复
+
+`v2.3.0` 建立双端 UI 优化和部署脚本，`v2.3.1` 接入统一 CI/CD、生产备份和失败回滚，`v2.3.2` 修复版本分页与首页首屏空白。`V2.3.1` 与 `v2.4.0` 都可以从 tag 追溯。
+
+### `v2.2.x` 工程质量与文档治理
+
+这一阶段从单点业务功能转向持续治理：
+
+| 日期 | 提交 | 含义 |
+| --- | --- | --- |
+| 2026-04-26 | `857eacf` `chore: harden code quality for v2.2.0` | 将版本主题收敛到工程质量治理 |
+| 2026-05-02 | `9551452` `chore: continue v2.2.0 mapper hardening` | 继续推进 Mapper / SQL 级别硬化 |
+| 2026-05-16 | `0dd1819` `docs: add standalone VitePress site` | 建立独立文档站 |
+
+历史建设过程保留在 [路线图归档](/roadmap/)，现行维护规则见 [文档维护规范](/guide/documentation-maintenance)。
+
+### `v2.1.2` 聊天室防刷增强
+
+这一版的 release 信号很清晰：
+
+| 日期 | 提交 | 含义 |
+| --- | --- | --- |
+| 2026-05-02 | `282bdc4` `feat: release v2.1.2 security hardening` | 正式 release 提交 |
+| 2026-05-02 | `30676d2` `feat: optimize frontend UX and bundle loading` | 同批次前端体验和包加载优化 |
+| 2026-05-02 | `b999e59` `Merge pull request #49 from xiaou61/v2.1.2` | 版本分支合入主线 |
+
+这一版的重点不是大架构变更，而是把聊天室和安全链路补稳：
+
+- 聊天消息限流
+- `TYPING` 事件降噪
+- 消息校验
+- 前端失败态闭环
+
+对应资料：
+
+- [仓库 README](https://github.com/xiaou61/Code-Nest/blob/master/README.md) 的 `v2.1.2` 段落
+- 仓库内 `AI-DOCS/Development/Code-Nest优化审计报告.md`
+
+### `v2.1.1` 安全加固稳定批次
+
+这个版本在 README 里是明确存在的，但 Git 历史里**没有找到单独以 `v2.1.1` 命名的 release commit**。更像是 `v2.1.0` 和 `v2.1.2` 之间的一次稳定化发布批次。
+
+可以确认的事实：
+
+- README 有完整的 `v2.1.1` 更新段
+- 功能主题集中在文件权限、WebSocket 票据、CORS 与 HTML 净化
+- 但 Git log 中没有像 `v2.1.0`、`v2.1.2` 那样显式命名的 release 节点
+
+这意味着：
+
+- **对用户和产品来说，`v2.1.1` 是一个正式版本语义**
+- **对仓库演进来说，它更像一段稳定性补强批次，而不是强锚点 release commit**
+
+这是一个很典型的仓库现实：**版本语义比 tag/commit 更细，但 Git 锚点没有完全一一对应。**
+
+### `v2.1.0` Growth Intelligence
+
+这一版是 `v2.0.0` 之后最明确的一次“主题升级”：
+
+| 日期 | 提交 | 含义 |
+| --- | --- | --- |
+| 2026-04-26 | `7695d44` `feat: release v2.1.0 growth intelligence` | 正式 release 提交 |
+| 2026-04-26 | `56d1637` `Merge pull request #48 from xiaou61/v2.1.0` | 版本分支合入 |
+
+关键词：
+
+- 学习成长驾驶舱 2.1
+- 成长分 / 能力雷达 / 今日任务
+- 管理端 AI Runtime 质量中心
+
+这说明项目在 `v2.0.0` 完成 AI 底座重构后，开始往“用户成长闭环 + AI 治理闭环”继续上层建设。
+
+对应资料：
+
+- [仓库 README](https://github.com/xiaou61/Code-Nest/blob/master/README.md) 的 `v2.1.0` 段落
+- 仓库内 `AI-DOCS/Archive/历史版本/2026-04-26-v2.1.0-growth-intelligence-design.md`
+- 仓库内 `AI-DOCS/Archive/历史版本/2026-04-26-v2.1.0-growth-intelligence.md`
+
+### `v2.0.1` 重构后功能补齐
+
+这一版的 Git 证据也比较完整：
+
+| 日期 | 提交 | 含义 |
+| --- | --- | --- |
+| 2026-04-26 | `2f6dcac` `chore: bump version to v2.0.1` | 版本号切换 |
+| 2026-04-26 | `be1f5ab` `feat: add v2.0.1 upgrade features` | 主要功能补齐 |
+| 2026-04-26 | `40751ad` `docs: update v2.0.1 release notes` | 更新版本说明 |
+| 2026-04-26 | `737cdcc` `Merge pull request #47 from xiaou61/v2.0.1` | 分支合入 |
+
+这版更像是 `v2.0.0` AI Runtime 重构完成后的补强与稳定化：
+
+- AI 治理总览
+- 求职闭环二期
+- OJ 赛事增强
+- 文件预览和积分导出
+
+### `v2.0.0` AI Runtime 全面重构
+
+这是目前 Git 里最标准的一次“大版本锚点”：
+
+| 日期 | 提交 | 含义 |
+| --- | --- | --- |
+| 2026-04-22 | `d9deeb2` `refactor: release ai runtime replatform v2.0.0` | 真正的重构主提交 |
+| 2026-04-25 | `1a23763` `chore: bump version to v2.0.0` | 版本号提升 |
+| 2026-04-25 | `e92abec` `Merge pull request #46 from xiaou61/v2.0.0` | 分支合入主线 |
+| 2026-04-25 | tag `V2.0.0` | 当前可见的最新正式 tag 锚点 |
+
+这版的意义非常大：
+
+- 彻底移除 Coze 链路
+- 统一到 `LangChain4j + LangGraph4j + LlamaIndex`
+- 引入 Prompt / Schema / RAG / 回归 / 治理等工程化能力
+
+从仓库演进角度看，`v2.0.0` 是当前主产品线的真正分水岭。
+
+### `v1.8.1` / `v1.8.2`
+
+`v1.8.x` 这一段还属于 `v2.0.0` 前的业务能力持续扩展阶段。
+
+能确认的锚点：
+
+| 日期 | 提交 | 含义 |
+| --- | --- | --- |
+| 2026-03-01 | `187c005` `docs(release): update README for v1.8.1 and bump maven revision` | `v1.8.1` 版本说明与版本号同步 |
+| 2026-03-01 | `e2e83dc` `Merge pull request #44 from xiaou61/v1.8.1` | `v1.8.1` 合入 |
+| 2026-03-14 | `6e80a9d` `Merge pull request #45 from xiaou61/v1.8.2` | `v1.8.2` 合入 |
+
+结合 README 和现有文档，这一段主要对应：
+
+- 学习资产转化引擎
+- 求职闭环中台 / Career Loop
+- 内容向学习资产沉淀
+
+### 更早期版本
+
+仓库里还能看到更早的 tag：
+
+`V1.0.0`、`V1.1.1`、`V1.2.0`、`V1.2.1`、`V1.3.0`、`V1.4.0`、`V1.5.0`、`V1.6.0`、`V1.6.1`、`V1.6.3`、`V1.7.0`、`V1.7.1`、`V1.8.0`
+
+这说明项目在 `v1.x` 阶段就已经持续发布，但当前文档站更详细整理的是 `v1.8.x` 之后的现代主线，因为这部分和现有代码、AI Runtime、文档治理关系最强。
+
+## 当前状态怎么判断
+
+现在如果有人问你：“项目当前到底在哪个版本状态？”更稳的回答方式是：
+
+| 问题 | 看哪里 |
+| --- | --- |
+| 仓库当前工作线是什么 | `pom.xml`、前端 `package.json`、README 版本 badge |
+| 文档和代码同步到哪一批 | [文档同步基线](/reference/docs-sync-baseline) |
+| 当前大版本主题是什么 | README 最新版本段 + [变更日志](/guide/changelog) |
+| 产品内给用户展示什么版本公告 | `/version-history` 和后台 `/system/version` |
+
+当前仓库状态：
+
+- **当前发布线**：`v2.5.6`
+- **当前构建产物版本**：`v2.5.6`，以 `release/manifest.json` 为事实源，其余文件为受校验投影
+- **最近正式 tag**：`v2.5.6`
+- **当前文档基线**：由 [文档同步基线](/reference/docs-sync-baseline) 在构建前动态刷新
+
+## 产品内版本墙视角
+
+上面讲的是仓库版本怎么演进。下面这部分讲的是“产品内版本历史模块本身怎么实现”。
+
+## 功能入口
+
+| 端 | 页面 | 说明 |
+| --- | --- | --- |
+| 用户端 | `/version-history` | 查看时间线、搜索版本、打开版本详情 |
+| 管理端 | `/system/version` | 创建、编辑、发布、隐藏、取消发布、批量操作 |
+| 后端用户接口 | `/version` | 公开版本历史 |
+| 后端管理接口 | `/admin/version` | 后台版本管理 |
+
+## 源码地图
+
+| 层级 | 文件 |
+| --- | --- |
+| 用户 API | `vue3-user-front/src/api/version.js` |
+| 管理页面 | `vue3-admin-front/src/views/system/version/index.vue` |
+| 管理 API | `vue3-admin-front/src/api/version.js` |
+| 公开 Controller | `xiaou-version/src/main/java/com/xiaou/version/controller/pub/VersionHistoryController.java` |
+| 管理 Controller | `xiaou-version/src/main/java/com/xiaou/version/controller/admin/VersionHistoryAdminController.java` |
+| Service | `xiaou-version/src/main/java/com/xiaou/version/service/impl/VersionHistoryServiceImpl.java` |
+| 实体 | `xiaou-version/src/main/java/com/xiaou/version/domain/VersionHistory.java` |
+
+## 数据模型
+
+核心表是 `version_history`：
+
+| 字段 | 说明 |
+| --- | --- |
+| `version_number` | 版本号，例如 `v2.2.0` |
+| `title` | 更新标题 |
+| `update_type` | 更新类型 |
+| `description` | 版本简要描述 |
+| `prd_url` | PRD 或详细文档链接 |
+| `release_time` | 发布时间 |
+| `status` | 发布状态 |
+| `sort_order` | 排序权重，数字越大越靠前 |
+| `view_count` | 浏览次数 |
+| `is_featured` | 是否重点推荐 |
+| `deleted` | 逻辑删除标记 |
+
+更新类型：
+
+| 值 | 含义 |
+| --- | --- |
+| `1` | 重大更新 |
+| `2` | 功能更新 |
+| `3` | 修复更新 |
+| `4` | 其他 |
+
+发布状态：
+
+| 值 | 含义 | 用户端是否可见 |
+| --- | --- | --- |
+| `0` | 草稿 | 否 |
+| `1` | 已发布 | 是 |
+| `2` | 已隐藏 | 否 |
+
+## 用户侧接口
+
+| 接口 | 方法 | 说明 |
+| --- | --- | --- |
+| `/version/timeline` | `POST` | 分页查看已发布版本 |
+| `/version/{id}` | `GET` | 查看版本详情 |
+| `/version/view` | `POST` | 增加浏览次数 |
+| `/version/search` | `POST` | 搜索已发布版本 |
+| `/version/latest` | `GET` | 获取最新若干版本，默认 5 条 |
+
+用户侧只读已发布版本。草稿和隐藏版本不能泄露到前台。
+
+## 管理侧接口
+
+| 接口 | 方法 | 说明 |
+| --- | --- | --- |
+| `/admin/version/list` | `POST` | 管理端分页查询 |
+| `/admin/version/{id}` | `GET` | 版本详情 |
+| `/admin/version/create` | `POST` | 创建版本 |
+| `/admin/version/update` | `PUT` | 更新版本 |
+| `/admin/version/delete` | `DELETE` | 逻辑删除 |
+| `/admin/version/publish` | `POST` | 发布 |
+| `/admin/version/hide` | `POST` | 隐藏 |
+| `/admin/version/unpublish` | `POST` | 取消发布，回到草稿 |
+| `/admin/version/batch/publish` | `POST` | 批量发布 |
+| `/admin/version/batch/hide` | `POST` | 批量隐藏 |
+| `/admin/version/batch/delete` | `POST` | 批量逻辑删除 |
+| `/admin/version/check-version/{versionNumber}` | `GET` | 检查版本号是否重复 |
+
+## 创建和发布流程
+
+1. 管理员在 `/system/version` 填写版本号、标题、类型、说明、PRD 链接和发布时间。
+2. 后端检查版本号是否已存在。唯一约束是 `version_number + deleted`。
+3. 发布时间必须能按 `yyyy-MM-dd HH:mm:ss` 解析。
+4. 创建记录时写入创建人、初始浏览次数 0。
+5. 草稿状态下用户端不可见。
+6. 点击发布后，状态改为 `1`。
+7. 用户端时间线和最新版本接口开始返回该记录。
+8. 用户查看详情后，可调用 `/version/view` 增加浏览次数。
+
+## 状态流转
+
+```text
+草稿(0) -> 已发布(1)
+已发布(1) -> 已隐藏(2)
+已隐藏(2) -> 已发布(1)
+已发布(1) -> 草稿(0)
+任意状态 -> 逻辑删除(deleted = 1)
+```
+
+## 一条好版本记录应该包含什么
+
+| 内容 | 说明 |
+| --- | --- |
+| 版本号 | 和 Git / 部署 / 文档口径尽量一致 |
+| 发布时间 | 方便和发版、告警、事故时间线对齐 |
+| 一句话标题 | 让用户马上知道主题 |
+| 简要描述 | 不要写“优化若干问题”这种空描述 |
+| 重点功能 | 用户能感知的变化 |
+| 修复项 | 稳定性、兼容性、权限、性能修复 |
+| 升级注意事项 | 是否需要执行 SQL、清缓存、重启依赖 |
+| 链接 | 可指向 PRD、设计文档、VitePress 页面 |
+
+## 和文档站的关系
+
+版本墙和文档站最好这样分工：
+
+| 产品版本历史 | VitePress |
+| --- | --- |
+| 面向最终用户和管理员 | 面向开发者、维护者、学习者 |
+| 讲“这一版更新了什么” | 讲“这一版背后改了哪些模块、为什么这么改、怎么维护” |
+| 允许简洁摘要 | 需要保留源码、流程、验证和风险上下文 |
+| 更接近发布公告 | 更接近长期知识库 |
+
+所以现在这页改成 Git 演进视角，其实是在补一个空白：
+
+**让维护者不只会写版本公告，还能读懂版本主线。**
+
+如果你接下来要继续把某个版本段按实际提交重写得更扎实，可以直接配合 [按 Git Log 重写版本更新记录](/guide/git-log-release-notes) 一起看。
+如果你已经拿到了证据，准备继续把它写成 README 版本段、产品内版本墙或团队交接记录，继续看 [版本公告与发版交接模板](/guide/version-release-handoff-template)。
+如果你想直接照着真实版本样例来抄结构，再继续看 [版本公告与交接实战样例](/guide/version-release-worked-examples)。
+
+## 验证清单
+
+- `README` 里的大版本段和本页的主线描述不要互相矛盾。
+- 版本号、时间、提交语义尽量以真实 Git 记录为准。
+- 如果某个版本在 README 存在但 Git 没有显式 release commit，要明确写出这一点，不要假装它有单独锚点。
+- 新发版本时，产品内版本墙、README 更新段和本页三者至少要同步其中两处，避免完全漂移。
+
+## 常见误区
+
+| 误区 | 问题 | 更稳的做法 |
+| --- | --- | --- |
+| 只看 tag 不看 commit | 很多后续版本没有继续打 tag | tag 看锚点，commit 看真实演进 |
+| 只看 README 不看 Git | README 是摘要，不是完整证据 | 用 README 定主题，再用 git log 定批次 |
+| 把产品版本墙当仓库演进史 | 用户公告粒度太粗 | 产品墙讲“用户看到什么”，文档页讲“仓库怎么演进” |
+| 没有显式 release commit 也硬写成强锚点 | 会和真实历史对不上 | 明确标注"这是稳定化批次，不是单独 release commit" |
+
+---
+
+## 版本历史模块深度拆解
+
+> 以下内容基于 `xiaou-version` 全部源码逐行拆解，覆盖 1 个 ServiceImpl、2 个 Controller、1 个 Domain、1 个 Mapper + XML、3 个 DTO。
+
+### 一、状态机与接口对照
+
+版本记录的状态流转实际是通过 `updateStatus` 方法直接修改 `status` 字段实现的，没有状态前置校验：
+
+```
+status 字段值:
+  0 = 草稿
+  1 = 已发布
+  2 = 已隐藏
+
+管理端可执行的状态变更:
+  publishVersion(id)     → status = 1 (从任意状态改为已发布)
+  hideVersion(id)        → status = 2 (从任意状态改为已隐藏)
+  unpublishVersion(id)   → status = 0 (从任意状态改为草稿)
+
+没有校验:
+  - 草稿→已发布: 不检查内容是否完整
+  - 已发布→草稿: 不检查是否会影响用户端展示
+  - 已隐藏→已发布: 直接改状态, 不检查时间是否过期
+```
+
+**关键发现**：`publishVersion`、`hideVersion`、`unpublishVersion` 都直接调用 `updateStatus(id, newStatus, adminId)`，没有校验当前状态。这意味着：
+- 可以把一条草稿直接改为已隐藏（逻辑上不合理）
+- 可以把一条已发布版本取消发布（用户端突然消失）
+- 状态变更没有"只允许相邻状态流转"的约束
+
+### 二、用户端访问控制缺失
+
+**源码**：`VersionHistoryController`
+
+```java
+@GetMapping("/{id}")
+public Result<VersionHistoryResponse> getVersionDetail(@PathVariable Long id) {
+    VersionHistoryResponse result = versionHistoryService.getVersionDetail(id);
+    return Result.success(result);
+}
+```
+
+**关键发现**：`getVersionDetail` 直接按 ID 查询版本记录，**不检查版本是否已发布或已隐藏**。这意味着用户端可以通过 URL 直接访问草稿或隐藏状态的版本记录。而 `getPublishedVersionList` 使用 `selectPublishedByPage` SQL 确保只返回 `status=1` 的记录，所以列表是安全的，但详情接口是泄露入口。
+
+同样，`incrementViewCount`也不检查状态——用户可以对草稿版本增加浏览次数。
+
+### 三、版本号唯一性检查的竞态
+
+**源码**：`VersionHistoryServiceImpl.checkVersionNumberExists`
+
+```java
+checkVersionNumberExists(versionNumber, excludeId):
+  if (versionNumber == null || blank) → false
+  existingVersion = versionHistoryMapper.selectByVersionNumber(versionNumber, 0)
+  → null → false
+  → 存在 → excludeId == null || existingVersion.id != excludeId
+```
+
+**关键发现**：唯一性检查与 `insert` 之间存在时间窗口。两个管理员同时创建相同版本号时，可能都通过唯一性检查，但只有第一个 INSERT 会成功——数据库的 `version_number + deleted` 唯一索引会阻止第二个 INSERT。
+
+但 `@Transactional` 只在方法级别，`checkVersionNumberExists` 的 SELECT 和后续的 INSERT 在同一个事务中，对 MySQL InnoDB 来说，普通 SELECT（不是 `SELECT ... FOR UPDATE`）读取的是快照，不是最新提交数据。所以在并发场景下，两个事务可能都读到"版本号不存在"的快照，然后都尝试 INSERT，最终依赖数据库唯一索引抛异常。
+
+### 四、逻辑删除与唯一索引冲突
+
+**源码**：`VersionHistoryServiceImpl.deleteVersion`
+
+```java
+deleteVersion(id):
+  logicalDeleteById(id, adminId) → UPDATE version_history SET deleted=1 WHERE id=#{id} AND deleted=0
+```
+
+**关键发现**：唯一约束是 `version_number + deleted`。逻辑删除后 `deleted=1`，这意味着已删除的版本号仍然占用唯一索引空间——但因为是 `deleted=1`，不是 `deleted=0`，所以新创建相同版本号不会违反唯一约束（因为新记录的 `deleted=0`，与已删除记录的 `deleted=1` 组合不同）。
+
+但如果**两次逻辑删除同一个版本号**（比如先删除 v2.0.0，再创建新 v2.0.0，再删除新 v2.0.0），数据库会有两条 `version_number='v2.0.0' AND deleted=1` 的记录，违反唯一约束。`checkVersionNumberExists` 只查 `deleted=0`，不会发现冲突，但 INSERT 时数据库唯一索引会阻止。
+
+### 五、批量操作的 SQL 实现
+
+**源码**：`VersionHistoryMapper.xml`
+
+```xml
+batchUpdateStatus:
+  UPDATE version_history SET status=#{status}, updated_by=#{updatedBy}, updated_time=NOW()
+  WHERE deleted=0 AND id IN (#{ids})
+
+batchLogicalDelete:
+  UPDATE version_history SET deleted=1, updated_by=#{updatedBy}, updated_time=NOW()
+  WHERE deleted=0 AND id IN (#{ids})
+```
+
+**关键发现**：批量操作使用 `IN` 列表，但没有大小限制。如果传入几千个 ID，SQL 会很长。MyBatis 的 `<foreach>` 会生成 `id IN (1, 2, 3, ...)`，MySQL 对超长 IN 列表有性能问题。Service 层也没有对 `ids` 列表大小做校验。
+
+### 六、排序策略
+
+管理端和用户端的排序规则相同：
+
+```sql
+ORDER BY sort_order DESC, release_time DESC, created_time DESC
+```
+
+**关键发现**：`sort_order` 优先于 `release_time`。这意味着管理员可以通过调整 `sort_order` 来手动控制版本在时间线上的显示顺序，而不受发布时间限制。这是合理的运营需求，但也意味着时间线不一定严格按发布时间排列——用户可能会看到"旧版本排在新版本前面"的情况。
+
+### 七、深度发现与坑点
+
+#### 7.1 已确认的代码问题
+
+| 编号 | 问题 | 位置 | 影响 |
+| --- | --- | --- | --- |
+| BUG-1 | 详情接口不检查版本状态 | `VersionHistoryController.getVersionDetail` | 用户端可访问草稿和隐藏版本 |
+| BUG-2 | 状态变更无前置校验 | `VersionHistoryServiceImpl.publishVersion/hideVersion/unpublishVersion` | 可以把草稿直接改为隐藏，或不合理的状态跳转 |
+| BUG-3 | 浏览次数不检查版本状态 | `VersionHistoryServiceImpl.incrementViewCount` | 可以对草稿版本增加浏览次数 |
+| BUG-4 | 批量操作无大小限制 | `VersionHistoryServiceImpl.batchPublishVersions/batchHideVersions/batchDeleteVersions` | 大量 ID 可能导致超长 SQL |
+| BUG-5 | 管理端更新接口是 POST 而非 PUT | `VersionHistoryAdminController.updateVersion` | HTTP 方法语义不一致，create 和 update 都用 POST |
+
+#### 7.2 设计层面的潜在风险
+
+| 编号 | 风险 | 说明 |
+| --- | --- | --- |
+| RISK-1 | 版本号唯一性检查与 INSERT 竞态 | 并发创建时依赖数据库唯一索引兜底 |
+| RISK-2 | 多次逻辑删除同一版本号 | 两条 `deleted=1` 记录违反 `version_number + deleted` 唯一约束 |
+| RISK-3 | 取消发布无用户端感知 | 已发布版本突然变为草稿，用户端时间线会消失但无提示 |
+| RISK-4 | sort_order 优先于 release_time | 管理员手动排序可能导致时间线不按时间排列 |
+
+#### 7.3 架构设计亮点
+
+| 编号 | 亮点 | 说明 |
+| --- | --- | --- |
+| H-1 | 逻辑删除 + 唯一索引组合 | `version_number + deleted` 允许删除后重新创建相同版本号 |
+| H-2 | 管理端 / 用户端分离查询 | 管理端查所有状态，用户端只查已发布 |
+| H-3 | @RequireAdmin + @Log 注解 | 所有管理端接口有权限保护和操作日志 |
+| H-4 | 发布时间格式校验 | `yyyy-MM-dd HH:mm:ss` 格式错误会抛明确提示 |
+| H-5 | 批量操作 | 支持批量发布、隐藏、删除 |
+| H-6 | version_number 重复预检 | 创建前可调用 check-version 接口预检 |
+
+#### 7.4 源码导航速查
+
+| 想了解 | 读什么 |
+| --- | --- |
+| 版本 CRUD | `VersionHistoryServiceImpl.java` — 创建/更新/删除/发布/隐藏/批量 |
+| 状态流转 | `VersionHistoryServiceImpl.publishVersion/hideVersion/unpublishVersion` — 直接改 status |
+| 用户端接口 | `VersionHistoryController.java` — timeline/detail/view/search/latest |
+| 管理端接口 | `VersionHistoryAdminController.java` — list/create/update/delete/publish/hide/batch |
+| 数据模型 | `VersionHistory.java` — 15 字段实体 |
+| SQL | `VersionHistoryMapper.xml` — 管理端/用户端分离查询条件 |
+
+
+## 相关模块
+
+| 模块 | 关系 | 说明 |
+| --- | --- | --- |
+| [公共底座](/modules/common) | 强依赖 | 版本历史模块依赖公共底座的统一响应和异常处理 |
+| [鉴权与用户体系](/modules/auth) | 间接依赖 | 版本查看可能需要用户登录态 |
+| [工具、摸鱼与版本](/modules/tools-moyu-version) | 强依赖 | 版本历史与工具模块紧密关联 |
+| [系统运营后台](/modules/system-ops) | 被依赖 | 版本管理界面在管理端 |

@@ -1,0 +1,219 @@
+groups:
+  - name: code-nest-sre-recording
+    interval: 30s
+    rules:
+      - record: code_nest:sre_outbox_backlog_events
+        expr: max(xiaou_sre_outbox_backlog_events)
+
+      - record: code_nest:sre_outbox_oldest_age_seconds
+        expr: max(xiaou_sre_outbox_oldest_age_seconds)
+
+      - record: code_nest:sre_evaluation_backlog_runs
+        expr: max(xiaou_sre_evaluation_backlog_runs)
+
+      - record: code_nest:sre_evaluation_oldest_age_seconds
+        expr: max(xiaou_sre_evaluation_oldest_age_seconds)
+
+      - record: code_nest:sre_investigation_runs_15m
+        expr: sum(increase(xiaou_sre_investigation_runs_total[15m]))
+
+      - record: code_nest:sre_investigation_failure_ratio_15m
+        expr: |
+          sum(increase(xiaou_sre_investigation_runs_total{outcome=~"failed|unavailable"}[15m]))
+          /
+          clamp_min(sum(increase(xiaou_sre_investigation_runs_total[15m])), 1)
+
+  - name: code-nest-availability
+    interval: 30s
+    rules:
+      - alert: CodeNestTargetDown
+        expr: up{job="code-nest"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          domain: availability
+        annotations:
+          summary: Code-Nest metrics target is unavailable
+          description: "{{ $labels.instance }} has not been scraped successfully for 2 minutes."
+
+      - alert: CodeNestPublicEndpointDown
+        expr: probe_success{job="blackbox-http"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          domain: availability
+        annotations:
+          summary: Code-Nest public endpoint is unavailable
+          description: "HTTP probe to the public endpoint failed for {{ $labels.instance }}."
+
+  - name: code-nest-application
+    interval: 30s
+    rules:
+      - alert: CodeNestHighHttpErrorRatio
+        expr: |
+          (
+            sum(rate(http_server_requests_seconds_count{job="code-nest",status=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(http_server_requests_seconds_count{job="code-nest"}[5m])), 0.001)
+          ) > 0.05
+          and
+          sum(rate(http_server_requests_seconds_count{job="code-nest"}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          domain: application
+        annotations:
+          summary: Code-Nest HTTP 5xx ratio is high
+          description: "5xx ratio has exceeded 5% for 5 minutes while traffic is present."
+
+      - alert: CodeNestHighHttpLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(http_server_requests_seconds_bucket{job="code-nest"}[5m]))
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+          domain: application
+        annotations:
+          summary: Code-Nest HTTP latency is high
+          description: "P95 HTTP latency has exceeded 2 seconds for 10 minutes."
+
+      - alert: CodeNestHighJvmHeapUsage
+        expr: |
+          sum(jvm_memory_used_bytes{job="code-nest",area="heap"})
+          /
+          clamp_min(sum(jvm_memory_max_bytes{job="code-nest",area="heap"}), 1)
+          > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          domain: application
+        annotations:
+          summary: Code-Nest JVM heap usage is high
+          description: "JVM heap utilization has exceeded 85% for 10 minutes."
+
+  - name: code-nest-host
+    interval: 30s
+    rules:
+      - alert: CodeNestHostDiskLow
+        expr: |
+          node_filesystem_avail_bytes{job="node-exporter",fstype!~"tmpfs|overlay",mountpoint!~"/var/lib/containers/storage/overlay($|/)"}
+          /
+          node_filesystem_size_bytes{job="node-exporter",fstype!~"tmpfs|overlay",mountpoint!~"/var/lib/containers/storage/overlay($|/)"}
+          < 0.15
+        for: 15m
+        labels:
+          severity: warning
+          domain: host
+        annotations:
+          summary: Code-Nest host disk space is low
+          description: "Available disk space is below 15% on {{ $labels.instance }} ({{ $labels.mountpoint }})."
+
+      - alert: CodeNestHostDiskCritical
+        expr: |
+          node_filesystem_avail_bytes{job="node-exporter",fstype!~"tmpfs|overlay",mountpoint!~"/var/lib/containers/storage/overlay($|/)"}
+          /
+          node_filesystem_size_bytes{job="node-exporter",fstype!~"tmpfs|overlay",mountpoint!~"/var/lib/containers/storage/overlay($|/)"}
+          < 0.05
+        for: 5m
+        labels:
+          severity: critical
+          domain: host
+        annotations:
+          summary: Code-Nest host disk space is critically low
+          description: "Available disk space is below 5% on {{ $labels.instance }} ({{ $labels.mountpoint }})."
+
+      - alert: CodeNestHostCpuHigh
+        expr: |
+          1 - avg by (instance) (rate(node_cpu_seconds_total{job="node-exporter",mode="idle"}[5m])) > 0.90
+        for: 15m
+        labels:
+          severity: warning
+          domain: host
+        annotations:
+          summary: Code-Nest host CPU usage is high
+          description: "Host CPU usage has exceeded 90% for 15 minutes on {{ $labels.instance }}."
+
+  - name: code-nest-sre
+    interval: 30s
+    rules:
+      - alert: CodeNestSreOutboxStalled
+        expr: |
+          code_nest:sre_outbox_backlog_events > 0
+          and
+          code_nest:sre_outbox_oldest_age_seconds > 300
+        for: 5m
+        labels:
+          severity: critical
+          domain: sre-runtime
+        annotations:
+          summary: Code-Nest SRE Outbox is stalled
+          description: "The oldest pending SRE Outbox event has exceeded 5 minutes."
+
+      - alert: CodeNestSreEvaluationQueueStalled
+        expr: |
+          code_nest:sre_evaluation_backlog_runs > 0
+          and
+          code_nest:sre_evaluation_oldest_age_seconds > 900
+        for: 5m
+        labels:
+          severity: warning
+          domain: sre-runtime
+        annotations:
+          summary: Code-Nest RCA evaluation queue is stalled
+          description: "The oldest queued RCA evaluation has exceeded 15 minutes."
+
+      - alert: CodeNestSreQueueTerminalFailure
+        expr: sum by (queue) (increase(xiaou_sre_queue_events_total{event="terminal_failure"}[10m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+          domain: sre-runtime
+        annotations:
+          summary: Code-Nest SRE queue reached a terminal failure
+          description: "Queue {{ $labels.queue }} recorded at least one terminal failure in 10 minutes."
+
+      - alert: CodeNestSreQueueDeadlineExceeded
+        expr: sum by (queue) (increase(xiaou_sre_queue_events_total{event="deadline_exceeded"}[10m])) > 0
+        for: 0m
+        labels:
+          severity: critical
+          domain: sre-runtime
+        annotations:
+          summary: Code-Nest SRE queue exceeded a deadline
+          description: "Queue {{ $labels.queue }} recorded at least one deadline violation in 10 minutes."
+
+      - alert: CodeNestSreLeaseRecoverySpike
+        expr: sum by (queue) (increase(xiaou_sre_queue_events_total{event="lease_recovered"}[15m])) > 3
+        for: 2m
+        labels:
+          severity: warning
+          domain: sre-runtime
+        annotations:
+          summary: Code-Nest SRE lease recovery rate is elevated
+          description: "Queue {{ $labels.queue }} recovered more than three expired leases in 15 minutes."
+
+      - alert: CodeNestSreInvestigationFailureRatioHigh
+        expr: |
+          code_nest:sre_investigation_runs_15m >= 4
+          and
+          code_nest:sre_investigation_failure_ratio_15m > 0.25
+        for: 5m
+        labels:
+          severity: warning
+          domain: sre-quality
+        annotations:
+          summary: Code-Nest RCA investigation failure ratio is high
+          description: "More than 25% of RCA investigations failed or were unavailable in 15 minutes."
+
+      - alert: CodeNestSreInvestigationDurationHigh
+        expr: max_over_time(xiaou_sre_investigation_duration_seconds_max[10m]) > 120
+        for: 5m
+        labels:
+          severity: warning
+          domain: sre-quality
+        annotations:
+          summary: Code-Nest RCA investigation duration is high
+          description: "At least one RCA investigation has remained above 120 seconds."

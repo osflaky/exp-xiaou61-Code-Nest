@@ -1,0 +1,75 @@
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### IntelliJ IDEA ###
+*.iws
+*.iml
+*.ipr
+
+### Eclipse ###
+
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+### Mac OS ###
+.DS_Store
+/.idea/
+/vue3-admin-front/node_modules/
+/vue3-user-front/node_modules/
+/docs-site/node_modules/
+/docs-site/.vitepress/.temp/
+/docs-site/.vitepress/cache/
+/docs-site/.vitepress/dist/
+/logs/
+/uploads/
+/.tmp/
+/.cursor/
+/.idea/
+/vue3-admin-front/dist/
+/vue3-user-front/dist/
+/.claude/
+/.agents/
+/.worktrees/
+xiaou-application/src/main/resources/application-sec.yml
+xiaou-bootstrap/src/main/resources/application-sec.yml
+llamaindex-service/.venv/
+llamaindex-service/data/knowledge-base.json
+docker/ai/.env
+docker/monitoring/.env
+docker/monitoring/alertmanager/alertmanager.local.yml
+docker/monitoring/secrets/
+__pycache__/
+*.pyc
+
+# Local generated artifacts and scratch files
+output/
+dump.rdb
+/_write_*.cjs
+/nul
+/docs-site/build_output.txt
+/.codegraph/
+/.playwright-cli/
+/.codex-mihomo-geo/
+/findings.md
+/progress.md
+/task_plan.md
