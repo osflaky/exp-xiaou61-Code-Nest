@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - os: macos-latest
+          arch: arm64
+          runner: macos-latest
+          expander_leg: macos-latest--arm64
+    name: Backend Tests And Package [${{ matrix.expander_leg }}]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Verify repository version
+      run: python scripts/check-version-consistency.py
+
+    - name: Resolve backend artifact
+      id: release
+      shell: bash
+      run: |
+        echo "backend_module=$(python scripts/release_manifest.py get artifacts.backend.module | tr -d '\r')" >> "$GITHUB_OUTPUT"
+        echo "backend_source=$(python scripts/release_manifest.py get artifacts.backend.sourcePattern | tr -d '\r')" >> "$GITHUB_OUTPUT"
+        echo "backend_artifact=$(python scripts/release_manifest.py get artifacts.backend.ciArtifactName | tr -d '\r')" >> "$GITHUB_OUTPUT"
+        echo "maven_revision=$(python scripts/release_manifest.py get mavenRevision | tr -d '\r')" >> "$GITHUB_OUTPUT"
+
+    - name: Validate migration inventory
+      run: python scripts/db-migrate.py --dry-run
+
+      # Temurin ships no Windows aarch64 build of JDK 17; the Microsoft Build of
+      # OpenJDK does, so windows-11-arm uses that distribution instead.
+    - name: Setup Java 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: ${{ matrix.java_distribution || 'temurin' }}
+        java-version: "17"
+        architecture: ${{ matrix.arch }}
+        cache: maven
+
+    - name: Run backend test tier
+      shell: pwsh
+      run: ./scripts/code-nest-eval.ps1 -Tier backend
+
+    - name: Package backend
+      shell: bash
+      run: >-
+        mvn -B -pl "${{ steps.release.outputs.backend_module }}" -am clean package
+        -DskipTests -Drevision="${{ steps.release.outputs.maven_revision }}"
+
+    - name: Upload Surefire reports
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: code-nest-backend-surefire-reports
+        path: |
+          **/target/surefire-reports/**
+          **/target/*.dump
+          **/target/*.dumpstream
+        if-no-files-found: ignore
+
+    - name: Upload backend jar
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.release.outputs.backend_artifact }}
+        path: ${{ steps.release.outputs.backend_source }}
+        if-no-files-found: error
+
